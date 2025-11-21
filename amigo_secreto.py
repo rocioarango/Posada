@@ -200,6 +200,7 @@ BEBIDA_ALC_TOKENS = {
 
 BEBIDA_NOALC_TOKENS = {
     "gaseosa": "gaseosa",
+    "everest o ginger": "ginger ale",
     "everest": "ginger ale",
     "agua": "agua",
     "hielo": "hielo",
@@ -344,13 +345,6 @@ def resumen_bebidas(df_aportes: pd.DataFrame):
     total_alc = int(df_tmp["cant_bebida_alcoholica"].sum())
     total_noalc = int(df_tmp["cant_bebida_no_alcoholica"].sum())
     return total_alc, total_noalc
-
-def estado_rango(total, minimo, maximo):
-    if total < minimo:
-        return f"Por debajo del mínimo ⚠️"
-    if total > maximo:
-        return f"Por encima del máximo ⚠️"
-    return "Dentro del rango ✅"
 
 # ---------- APP STREAMLIT ----------
 
@@ -501,7 +495,7 @@ def main():
             key="cant_beb_alc",
         )
     elif beb_alc_sel:
-        # Aquí solo botellas, como pediste
+        # Solo botellas
         cant_beb_alc = st.number_input(
             "Cantidad (botellas):",
             min_value=0,
@@ -533,13 +527,11 @@ def main():
         elif beb_noalc_sel == "Everest o ginger":
             label_noalc = "Cantidad (botellas):"
         elif beb_noalc_sel == "Agua":
-            # Agua: explicitamente litros o botellas
             label_noalc = "Cantidad de agua (en litros):"
         elif beb_noalc_sel == "Limón":
             label_noalc = "Cantidad (kg de limón):"
         else:
             label_noalc = "Cantidad:"
-
         cant_beb_noalc = st.number_input(
             label_noalc,
             min_value=0,
@@ -706,37 +698,44 @@ def main():
 
     # ---------- RESUMEN DE BEBIDAS ----------
     st.markdown("---")
-    st.subheader("🥤 Resumen de bebidas (cupos sugeridos)")
+    st.subheader("🥤 Resumen de bebidas (lo que se viene registrando)")
 
     total_alc, total_noalc = resumen_bebidas(df_aportes)
-
-    # Rango sugerido para 18 personas (simple y equilibrado)
-    RANGO_ALC = (6, 15)      # botellas / six-pack declarados
-    RANGO_NOALC = (10, 22)   # botellas / litros / unidades
 
     filas_beb = [
         {
             "Tipo": "Bebidas alcohólicas",
             "Cantidad registrada": total_alc,
-            "Rango sugerido": f"{RANGO_ALC[0]} – {RANGO_ALC[1]}",
-            "Estado": estado_rango(total_alc, *RANGO_ALC),
         },
         {
             "Tipo": "Bebidas no alcohólicas / ingredientes",
             "Cantidad registrada": total_noalc,
-            "Rango sugerido": f"{RANGO_NOALC[0]} – {RANGO_NOALC[1]}",
-            "Estado": estado_rango(total_noalc, *RANGO_NOALC),
         },
     ]
 
     df_beb = pd.DataFrame(filas_beb)
     st.dataframe(df_beb, use_container_width=True, hide_index=True)
 
+    # Tarjeta con tu resumen rápido de máximos recomendados
     st.markdown(
         """
-        <div style="margin-top:6px;font-size:0.9rem;color:#555;">
-        💡 La idea es que haya <strong>suficiente bebida sin alcohol</strong> para preparar jugos, chilcanos,
-        sangrías, etc., y que la cantidad de alcohol sea razonable para 18 personas.
+        <div style="
+            background-color:#fff8e6;
+            padding:14px 18px;
+            border-radius:8px;
+            border:1px solid #f1c27d;
+            color:#5a3c2c;
+            margin-top:14px;
+            font-size:0.95rem;">
+            🎯 <strong>Recomendación rápida para 18 personas:</strong><br><br>
+
+            • 🍺 <strong>Cerveza:</strong> 5–6 six-packs (24–36 cervezas).<br>
+            • 🍷 <strong>Vino:</strong> 4 botellas (3 si es solo para tinto de verano o sangría).<br>
+            • 🥃 <strong>Licores:</strong> 3–4 botellas combinadas (pisco + ron + algo extra).<br>
+            • 🥤 <strong>Bebidas sin alcohol:</strong> 6 botellas grandes (gaseosa, ginger, agua).<br><br>
+
+            Esto sirve como <strong>tope / referencia</strong> para que haya equilibrio entre tragos y refrescos,
+            evitando que falte o que sobre demasiado.
         </div>
         """,
         unsafe_allow_html=True,
