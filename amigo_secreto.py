@@ -30,6 +30,7 @@ PARTICIPANTES = [
     "Ricardo Céspedes",
 ]
 
+
 # --------- LISTAS ---------
 LISTA_PIQUEOS = [
     "Alfajores",
