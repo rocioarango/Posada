@@ -6,7 +6,7 @@ import streamlit as st
 
 # ---------- CONFIGURACIÓN ----------
 ARCHIVO_APORTES = Path("aportes.csv")
-IMAGEN_PORTADA = "portada_posada.jpeg"
+IMAGEN_PORTADA = "portada_posada.jpeg"  # cambia el nombre si quieres
 
 # Participantes
 PARTICIPANTES = [
@@ -60,7 +60,7 @@ LISTA_BEBIDAS_NO_ALC = [
     "Otro (indicar)",
 ]
 
-# ---------- CLASIFICACIÓN PIQUEOS ----------
+# ------------ CLASIFICACIÓN DE PIQUEOS ------------
 PIQUEO_TIPO_DEFAULT = {
     "Alfajores": "Dulce",
     "Petipan de pollo": "Preparado",
@@ -94,7 +94,7 @@ PIQUEO_MAX_TEXTO = {
     "Papás, chifles, camotes y chifles": "Grupo snacks: máx. 6 bolsas",
 }
 
-# Cupos máximos por piqueo
+# Cupos máximos (personas que pueden elegir ese piqueo)
 PIQUEO_CUPOS_MAX = {
     "Alfajores": 3,
     "Petipan de pollo": 2,
@@ -106,7 +106,7 @@ PIQUEO_CUPOS_MAX = {
     "Papás, chifles, camotes y chifles": 3,
 }
 
-# Tipo de unidades por piqueo
+# Config de cantidades por piqueo
 PIQUEO_CONFIG = {
     "Alfajores": {
         "unit_type": "fraction_ciento",
@@ -159,14 +159,19 @@ PIQUEO_CONFIG = {
 }
 
 BAG_PIQUEOS = ["Cheetos y chizitos", "Papás, chifles, camotes y chifles"]
-MAX_BOLSAS_GRUPO = 6
+MAX_BOLSAS_GRUPO = 6  # bolsas grandes totales de snacks
 
-# ---------- RECETAS ----------
+# -------- Recetas de tragos --------
 RECIPES = {
     "Pisco": {
         "Chilcano clásico": ["pisco", "ginger ale", "limón", "hielo"],
         "Chilcano de maracuyá": [
-            "pisco", "maracuyá", "limón", "azúcar", "ginger ale", "hielo"
+            "pisco",
+            "maracuyá",
+            "limón",
+            "azúcar",
+            "ginger ale",
+            "hielo",
         ],
     },
     "Vino tinto": {
@@ -201,7 +206,8 @@ BEBIDA_NOALC_TOKENS = {
     "limón": "limón",
 }
 
-# ---------- FUNCIONES ÚTILES ----------
+# ---------- UTILIDADES ----------
+
 def normalizar(s: str) -> str:
     if not isinstance(s, str):
         return ""
@@ -209,11 +215,11 @@ def normalizar(s: str) -> str:
 
 def safe_int(value):
     try:
-        value = pd.to_numeric(value, errors="coerce")
-        if pd.isna(value):
+        num = pd.to_numeric(value, errors="coerce")
+        if pd.isna(num):
             return 0
-        return int(value)
-    except:
+        return int(num)
+    except Exception:
         return 0
 
 def cargar_aportes():
@@ -227,7 +233,6 @@ def cargar_aportes():
         "bebida_no_alcoholica",
         "cant_bebida_no_alcoholica",
     ]
-
     if ARCHIVO_APORTES.exists():
         df = pd.read_csv(ARCHIVO_APORTES, dtype=str)
         for c in columnas:
@@ -236,77 +241,87 @@ def cargar_aportes():
         df = df[columnas]
     else:
         df = pd.DataFrame(columns=columnas)
-
     return df
 
-def guardar_aportes(df):
-    df.to_csv(ARCHIVO_APORTES, index=False, encoding="utf-8")
+def guardar_aportes(df_aportes: pd.DataFrame):
+    df_aportes.to_csv(ARCHIVO_APORTES, index=False, encoding="utf-8")
 
-def contar_piqueos(df):
-    conteo = {p: 0 for p in PIQUEO_CUPOS_MAX}
-    if not df.empty:
-        for p in df["piqueo"]:
+def contar_piqueos(df_aportes: pd.DataFrame):
+    conteo = {p: 0 for p in PIQUEO_CUPOS_MAX.keys()}
+    if not df_aportes.empty:
+        for p in df_aportes["piqueo"]:
             if p in conteo:
                 conteo[p] += 1
     return conteo
 
-def contar_bolsas(df):
-    if df.empty:
+def contar_bolsas(df_aportes: pd.DataFrame):
+    if df_aportes.empty:
         return 0
-    df_tmp = df.copy()
+    df_tmp = df_aportes.copy()
     df_tmp["cant_piqueo"] = df_tmp["cant_piqueo"].apply(safe_int)
     mask = (df_tmp["piqueo"].isin(BAG_PIQUEOS)) | (df_tmp["tipo_piqueo"] == "Snack en bolsa")
     return int(df_tmp.loc[mask, "cant_piqueo"].sum())
 
-def obtener_cantidad_piqueo(piqueo_sel):
+def obtener_cantidad_piqueo(piqueo_sel: str):
+    """Devuelve cantidad y etiqueta para el campo, según el tipo."""
     if not piqueo_sel:
-        return 0
+        return 0, ""
 
     if piqueo_sel not in PIQUEO_CONFIG:
-        return st.number_input(
-            "Cantidad (unidades):",
+        label = "Cantidad de piqueo (unidades / porciones):"
+        cant = st.number_input(
+            label,
             min_value=0,
-            value=0,
             step=1,
-            key="gen_cant"
+            value=0,
+            key="cant_piqueo_generico",
         )
+        return int(cant), label
 
     cfg = PIQUEO_CONFIG[piqueo_sel]
     tipo = cfg["unit_type"]
 
     if tipo == "fraction_ciento":
+        label = "Cantidad (fracción de ciento):"
         opcion = st.selectbox(
-            "Cantidad (fracción de ciento):",
+            label,
             list(cfg["fraction_options"].keys()),
-            key=f"frac_{piqueo_sel}"
+            key=f"frac_{piqueo_sel}",
         )
-        return cfg["fraction_options"][opcion]
+        unidades = cfg["fraction_options"][opcion]
+        unidades = min(unidades, cfg["person_max"])
+        return int(unidades), label
 
     if tipo == "bags":
-        return st.number_input(
-            "Cantidad (bolsas grandes):",
+        label = "Cantidad (bolsas grandes):"
+        cant = st.number_input(
+            label,
             min_value=0,
             max_value=cfg["person_max"],
             step=1,
             value=0,
-            key=f"bags_{piqueo_sel}"
+            key=f"bags_{piqueo_sel}",
         )
+        return int(cant), label
 
-    return st.number_input(
-        "Cantidad (unidades):",
+    # units
+    label = "Cantidad (unidades):"
+    cant = st.number_input(
+        label,
         min_value=0,
         max_value=cfg["person_max"],
         step=1,
         value=0,
-        key=f"units_{piqueo_sel}"
+        key=f"units_{piqueo_sel}",
     )
+    return int(cant), label
 
-def ingredientes_disponibles(df):
+def ingredientes_disponibles(df_aportes: pd.DataFrame):
     tokens = set()
-    if df.empty:
+    if df_aportes.empty:
         return tokens
 
-    for _, row in df.iterrows():
+    for _, row in df_aportes.iterrows():
         beb_alc = normalizar(row.get("bebida_alcoholica", ""))
         cant_alc = safe_int(row.get("cant_bebida_alcoholica", 0))
         if beb_alc and cant_alc > 0 and beb_alc in BEBIDA_ALC_TOKENS:
@@ -319,10 +334,11 @@ def ingredientes_disponibles(df):
 
     return tokens
 
-def resumen_bebidas(df):
-    if df.empty:
+def resumen_bebidas(df_aportes: pd.DataFrame):
+    """Totales simples de bebidas (lo declarado por las personas)."""
+    if df_aportes.empty:
         return 0, 0
-    df_tmp = df.copy()
+    df_tmp = df_aportes.copy()
     df_tmp["cant_bebida_alcoholica"] = df_tmp["cant_bebida_alcoholica"].apply(safe_int)
     df_tmp["cant_bebida_no_alcoholica"] = df_tmp["cant_bebida_no_alcoholica"].apply(safe_int)
     total_alc = int(df_tmp["cant_bebida_alcoholica"].sum())
@@ -331,12 +347,13 @@ def resumen_bebidas(df):
 
 def estado_rango(total, minimo, maximo):
     if total < minimo:
-        return "Por debajo del rango ⚠️"
+        return f"Por debajo del mínimo ⚠️"
     if total > maximo:
-        return "Por encima del rango ⚠️"
+        return f"Por encima del máximo ⚠️"
     return "Dentro del rango ✅"
 
 # ---------- APP STREAMLIT ----------
+
 def main():
     st.set_page_config(
         page_title="Aportes Posada Territorial 2025",
@@ -344,87 +361,98 @@ def main():
         layout="centered",
     )
 
-    # Estilos básicos + modo claro
+    # ---- ESTILOS / MODO CLARO ----
     st.markdown(
         """
-<style>
-html, body, .stApp, [data-testid="stAppViewContainer"] {
-    color-scheme: light !important;
-}
-.stApp {
-    background: linear-gradient(180deg, #fff7f0 0%, #ffffff 40%);
-}
-.card {
-    background-color: #ffffff;
-    padding: 1.2rem 1rem;
-    border-radius: 0.8rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    border: 1px solid #f0e0d2;
-    margin-bottom: 1.2rem;
-}
-</style>
+        <style>
+        html, body, [data-testid="stAppViewContainer"], .stApp {
+            color-scheme: light !important;
+        }
+        .stApp {
+            background: linear-gradient(180deg, #fff7f0 0%, #ffffff 40%);
+        }
+        .titulo-principal {
+            font-size: 2.1rem;
+            font-weight: 700;
+            text-align: center;
+            color: #234;
+        }
+        .subtitulo {
+            text-align: center;
+            color: #555;
+            font-size: 0.95rem;
+            margin-bottom: 1.2rem;
+        }
+        .card {
+            background-color: #ffffff;
+            padding: 1.2rem 1rem;
+            border-radius: 0.8rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid #f0e0d2;
+            margin-bottom: 1.2rem;
+        }
+        .stButton>button[kind="primary"] {
+            background: linear-gradient(135deg, #ff7f50, #ff4b8b);
+            color: white;
+            border-radius: 999px;
+            padding: 0.55rem 1.4rem;
+            border: none;
+            font-weight: 600;
+        }
+        .stButton>button[kind="primary"]:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+        }
+        .dataframe th, .dataframe td {
+            white-space: nowrap;
+            text-align: center !important;
+        }
+        </style>
         """,
         unsafe_allow_html=True,
     )
 
-    if IMAGEN_PORTADA and Path(IMAGEN_PORTADA).exists():
+    if Path(IMAGEN_PORTADA).exists():
         st.image(IMAGEN_PORTADA, use_column_width=True)
 
-    st.markdown(
-        "<h2 style='text-align:center;'>🎄 Aportes Posada Territorial 2025</h2>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<p style='text-align:center;color:#555;'>Registra tu piqueo y bebida de forma ordenada ✨</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="titulo-principal">🎄 Aportes Posada Territorial 2025</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitulo">Registra tu piqueo y bebida de forma ordenada ✨</div>', unsafe_allow_html=True)
 
-    # --- AVISO DE SUGERENCIAS (corregido para que no se vea como código) ---
     st.markdown(
         """
-<div style="
-    background-color:#fff2e6;
-    padding:14px 20px;
-    border-radius:10px;
-    border:1px solid #f5c09a;
-    font-size:0.97rem;
-    color:#5a3c2c;
-    margin-top:15px;
-    text-align:justify;">
-
-    ⚠️ <strong>Sugerencia general de piqueos y bebidas para 18 personas</strong><br><br>
-
-    <strong>🧀 Piqueos:</strong><br>
-    La idea es que los piqueos vengan en presentaciones grandes:
-    <ul>
-        <li><strong>Snacks:</strong> máximo 6 bolsas grandes en total.</li>
-        <li><strong>Dulces / preparados:</strong> porciones suficientes para todos.</li>
-    </ul>
-
-    <br>
-    <strong>🥤 Bebidas sugeridas:</strong>
-    <ul>
-        <li><strong>🍻 Cerveza:</strong> 5–6 six-packs (24–36 cervezas).</li>
-        <li><strong>🍷 Vino tinto:</strong> 4 botellas (3 si es solo para sangría / tinto de verano).</li>
-        <li><strong>🥃 Licores:</strong> 3–4 botellas combinadas (pisco + ron + whisky/vodka).</li>
-        <li><strong>🥤 Sin alcohol:</strong> 6 botellas grandes (gaseosa, ginger ale, agua).</li>
-    </ul>
-
-</div>
+        <div style="
+            background-color:#fff2e6;
+            padding:12px 18px;
+            border-radius:8px;
+            border:1px solid #f5c09a;
+            font-size:0.95rem;
+            color:#5a3c2c;
+            margin-top:10px;
+            text-align:justify;">
+            ⚠️ <strong>Sugerencia general:</strong><br>
+            Somos <strong>18 personas</strong>. Para que todos puedan probar de todo sin que sobre demasiado,
+            la idea es que los piqueos vengan en <strong>presentaciones grandes o para compartir</strong>
+            (bolsas familiares, fracciones de ciento, bandejas), y que en total no superemos, por ejemplo,
+            <strong>6 bolsas grandes de snacks</strong> y una cantidad razonable de dulces y preparados.
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
     df_aportes = cargar_aportes()
-    conteo = contar_piqueos(df_aportes)
+    conteo_piqueos = contar_piqueos(df_aportes)
 
     # ---------- FORMULARIO ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("📝 Registrar aporte")
 
-    nombre = st.selectbox("Selecciona tu nombre:", sorted(PARTICIPANTES))
+    nombre = st.selectbox(
+        "Selecciona tu nombre:",
+        sorted(PARTICIPANTES),
+        key="nombre",
+    )
 
-    # Piqueo
+    # ---- Piqueo ----
     st.markdown("#### 🧀 Piqueo")
     piqueo_sel = st.radio(
         "¿Qué piqueo vas a llevar?",
@@ -436,30 +464,33 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     piqueo_otro = ""
     tipo_piqueo = ""
     if piqueo_sel == "Otro (indicar)":
-        piqueo_otro = st.text_input("Indica el piqueo:")
+        piqueo_otro = st.text_input("Indica el piqueo:", key="piqueo_otro")
         tipo_piqueo = st.radio(
             "¿Qué tipo de piqueo es?",
             ["Snack en bolsa", "Preparado", "Dulce"],
             horizontal=True,
+            key="tipo_piqueo_otro",
         )
     elif piqueo_sel:
         tipo_piqueo = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
 
-    cant_piqueo = 0
     if piqueo_sel:
-        cant_piqueo = obtener_cantidad_piqueo(piqueo_sel)
+        cant_piqueo, _ = obtener_cantidad_piqueo(piqueo_sel)
+    else:
+        cant_piqueo = 0
 
-    # Bebida alcohólica
+    # ---- Bebida alcohólica ----
     st.markdown("#### 🍷 Bebida alcohólica (opcional)")
     beb_alc_raw = st.selectbox(
         "Si llevarás bebida alcohólica, elige una (o deja vacío):",
         ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
+        key="beb_alc_raw",
     )
     beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
 
     beb_alc_otro = ""
     if beb_alc_sel == "Otro (indicar)":
-        beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?")
+        beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?", key="beb_alc_otro")
 
     if beb_alc_sel == "Cerveza":
         cant_beb_alc = st.number_input(
@@ -467,40 +498,45 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
             min_value=0,
             step=1,
             value=0,
+            key="cant_beb_alc",
         )
     elif beb_alc_sel:
+        # Aquí solo botellas, como pediste
         cant_beb_alc = st.number_input(
             "Cantidad (botellas):",
             min_value=0,
             step=1,
             value=0,
+            key="cant_beb_alc",
         )
     else:
         cant_beb_alc = 0
 
-    # Bebida no alcohólica
+    # ---- Bebida no alcohólica / ingredientes ----
     st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
     beb_noalc_raw = st.selectbox(
         "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
         ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
+        key="beb_noalc_raw",
     )
     beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
 
     beb_noalc_otro = ""
     if beb_noalc_sel == "Otro (indicar)":
-        beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?")
+        beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?", key="beb_noalc_otro")
 
     if beb_noalc_sel:
         if beb_noalc_sel == "Hielo":
             label_noalc = "Cantidad (bolsas de hielo):"
         elif beb_noalc_sel == "Gaseosa":
-            label_noalc = "Cantidad (botellas):"
-        elif beb_noalc_sel == "Everest o Ginger":
+            label_noalc = "Cantidad (botellas de gaseosa):"
+        elif beb_noalc_sel == "Everest o ginger":
             label_noalc = "Cantidad (botellas):"
         elif beb_noalc_sel == "Agua":
-            label_noalc = "Cantidad (en litros):"
+            # Agua: explicitamente litros o botellas
+            label_noalc = "Cantidad de agua (en litros):"
         elif beb_noalc_sel == "Limón":
-            label_noalc = "Cantidad (en Kg):"
+            label_noalc = "Cantidad (kg de limón):"
         else:
             label_noalc = "Cantidad:"
 
@@ -509,13 +545,14 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
             min_value=0,
             step=1,
             value=0,
+            key="cant_beb_noalc",
         )
     else:
         cant_beb_noalc = 0
 
-    enviado = st.button("✅ Registrar aporte", use_container_width=True)
+    enviado = st.button("✅ Registrar aporte", use_container_width=True, key="btn_registrar")
 
-    # ---------- PROCESAR ENVÍO ----------
+    # ---------- PROCESAR ----------
     if enviado:
         if not nombre.strip():
             st.error("Selecciona tu nombre.")
@@ -526,10 +563,9 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
             st.stop()
 
         if not piqueo_sel:
-            st.error("Debes elegir un piqueo.")
+            st.error("Elige un piqueo.")
             st.stop()
 
-        # Piqueo final
         if piqueo_sel == "Otro (indicar)":
             if not piqueo_otro.strip():
                 st.error("Indica qué piqueo llevarás.")
@@ -543,7 +579,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
             piqueo_final = piqueo_sel
             tipo_piqueo_final = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
             if piqueo_final in PIQUEO_CUPOS_MAX:
-                usados = conteo[piqueo_final]
+                usados = conteo_piqueos[piqueo_final]
                 if usados >= PIQUEO_CUPOS_MAX[piqueo_final]:
                     st.error("Ese piqueo ya llegó a su máximo de personas.")
                     st.stop()
@@ -552,7 +588,6 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
             st.error("Indica la cantidad de piqueo (mayor a 0).")
             st.stop()
 
-        # Límite global de snacks en bolsa
         if tipo_piqueo_final == "Snack en bolsa":
             bolsas_actuales = contar_bolsas(df_aportes)
             if bolsas_actuales + cant_piqueo > MAX_BOLSAS_GRUPO:
@@ -562,7 +597,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
                 )
                 st.stop()
 
-        # Bebida alcohólica final
+        # Bebida alcohólica
         if not beb_alc_sel:
             beb_alc_final = ""
             cant_beb_alc_final = 0
@@ -580,7 +615,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
                 st.stop()
             cant_beb_alc_final = int(cant_beb_alc)
 
-        # Bebida no alcohólica final
+        # Bebida no alcohólica
         if not beb_noalc_sel:
             beb_noalc_final = ""
             cant_beb_noalc_final = 0
@@ -598,14 +633,12 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
                 st.stop()
             cant_beb_noalc_final = int(cant_beb_noalc)
 
-        # Debe haber al menos una bebida
         if (not beb_alc_final or cant_beb_alc_final <= 0) and (
             not beb_noalc_final or cant_beb_noalc_final <= 0
         ):
             st.error("Debes registrar al menos una bebida (alcohólica o no alcohólica).")
             st.stop()
 
-        # Registrar
         nuevo = {
             "nombre": nombre.strip(),
             "piqueo": piqueo_final,
@@ -634,34 +667,39 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- CUPOS Y TABLA DE PIQUEOS ----------
+    # ---------- CUPOS PIQUEOS ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🍽️ Cupos y límites por piqueo")
 
     filas = []
     for p, maximo in PIQUEO_CUPOS_MAX.items():
-        usados = conteo[p]
+        usados = conteo_piqueos[p]
+        tipo = PIQUEO_TIPO_DEFAULT.get(p, "")
+        unidad = PIQUEO_UNIDAD.get(p, "")
+        max_txt = PIQUEO_MAX_TEXTO.get(p, "")
+        ok = usados < maximo
         filas.append(
             {
                 "Piqueo": p,
-                "Tipo": PIQUEO_TIPO_DEFAULT.get(p, ""),
-                "Unidad": PIQUEO_UNIDAD.get(p, ""),
-                "Máx. sugerido": PIQUEO_MAX_TEXTO.get(p, ""),
+                "Tipo": tipo,
+                "Unidad": unidad,
+                "Máx. sugerido": max_txt,
                 "Personas registradas": usados,
-                "Estado": "Disponible ✅" if usados < maximo else "Lleno 🚫",
+                "Estado": "Disponible ✅" if ok else "Lleno 🚫",
             }
         )
 
-    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+    df_cupos = pd.DataFrame(filas)
+    st.dataframe(df_cupos, use_container_width=True, hide_index=True)
 
     bolsas_actuales = contar_bolsas(df_aportes)
     st.markdown(
         f"""
-<div style="margin-top:8px;font-size:0.9rem;color:#555;">
-🧃 <strong>Snacks en bolsa (Cheetos, papas, chifles, camotes y similares):</strong><br>
-Máximo total sugerido: <strong>{MAX_BOLSAS_GRUPO} bolsas grandes</strong> entre todos.<br>
-Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
-</div>
+        <div style="margin-top:8px;font-size:0.9rem;color:#555;">
+        🧃 <strong>Snacks en bolsa (Cheetos, papas, chifles, camotes y similares):</strong><br>
+        Máximo total sugerido: <strong>{MAX_BOLSAS_GRUPO} bolsas grandes</strong> entre todos.<br>
+        Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -671,27 +709,38 @@ Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
     st.subheader("🥤 Resumen de bebidas (cupos sugeridos)")
 
     total_alc, total_noalc = resumen_bebidas(df_aportes)
-    RANGO_ALC = (6, 15)
-    RANGO_NOALC = (10, 22)
 
-    df_beb = pd.DataFrame(
-        [
-            {
-                "Tipo": "Bebidas alcohólicas",
-                "Cantidad registrada": total_alc,
-                "Rango sugerido": f"{RANGO_ALC[0]} – {RANGO_ALC[1]}",
-                "Estado": estado_rango(total_alc, *RANGO_ALC),
-            },
-            {
-                "Tipo": "Bebidas no alcohólicas / ingredientes",
-                "Cantidad registrada": total_noalc,
-                "Rango sugerido": f"{RANGO_NOALC[0]} – {RANGO_NOALC[1]}",
-                "Estado": estado_rango(total_noalc, *RANGO_NOALC),
-            },
-        ]
-    )
+    # Rango sugerido para 18 personas (simple y equilibrado)
+    RANGO_ALC = (6, 15)      # botellas / six-pack declarados
+    RANGO_NOALC = (10, 22)   # botellas / litros / unidades
 
+    filas_beb = [
+        {
+            "Tipo": "Bebidas alcohólicas",
+            "Cantidad registrada": total_alc,
+            "Rango sugerido": f"{RANGO_ALC[0]} – {RANGO_ALC[1]}",
+            "Estado": estado_rango(total_alc, *RANGO_ALC),
+        },
+        {
+            "Tipo": "Bebidas no alcohólicas / ingredientes",
+            "Cantidad registrada": total_noalc,
+            "Rango sugerido": f"{RANGO_NOALC[0]} – {RANGO_NOALC[1]}",
+            "Estado": estado_rango(total_noalc, *RANGO_NOALC),
+        },
+    ]
+
+    df_beb = pd.DataFrame(filas_beb)
     st.dataframe(df_beb, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        """
+        <div style="margin-top:6px;font-size:0.9rem;color:#555;">
+        💡 La idea es que haya <strong>suficiente bebida sin alcohol</strong> para preparar jugos, chilcanos,
+        sangrías, etc., y que la cantidad de alcohol sea razonable para 18 personas.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # ---------- TRAGOS POSIBLES ----------
     st.markdown("---")
@@ -716,7 +765,9 @@ Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
                 else:
                     st.markdown(f"- ℹ️ {nombre_trago}: faltarían **{', '.join(faltan)}**")
 
-    # ---------- APORTES REGISTRADOS ----------
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---------- REGISTROS, FALTAN Y DESCARGA ----------
     if not df_aportes.empty:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📋 Aportes registrados")
@@ -745,23 +796,31 @@ Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
 
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
-        # Quiénes faltan
+        # Botón descarga
+        csv_bytes = df_aportes.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Descargar registros en CSV",
+            data=csv_bytes,
+            file_name="aportes_posada.csv",
+            mime="text/csv",
+        )
+
         nombres_ya = set(df_aportes["nombre"].tolist())
         faltan = [n for n in sorted(PARTICIPANTES) if n not in nombres_ya]
         if faltan:
             st.markdown(
                 f"""
-<div style="
-    background-color:#ffecec;
-    padding:10px 14px;
-    border-radius:8px;
-    border:1px solid #ff4d4f;
-    margin-top:12px;
-    color:#a8071a;
-    font-size:0.95rem;">
-🔴 <strong>Faltan registrar sus aportes:</strong><br>
-{", ".join(faltan)}
-</div>
+                <div style="
+                    background-color:#ffecec;
+                    padding:10px 14px;
+                    border-radius:8px;
+                    border:1px solid #ff4d4f;
+                    margin-top:12px;
+                    color:#a8071a;
+                    font-size:0.95rem;">
+                    🔴 <strong>Faltan registrar sus aportes:</strong><br>
+                    {", ".join(faltan)}
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
