@@ -103,6 +103,10 @@ def main():
     st.markdown(
         """
         <style>
+        /* Forzar modo claro en todos los dispositivos */
+html, body, [data-testid="stAppViewContainer"], .stApp {
+    color-scheme: light !important;
+}
         /* Fondo suave */
         .stApp {
             background: linear-gradient(180deg, #fff7f0 0%, #ffffff 40%);
