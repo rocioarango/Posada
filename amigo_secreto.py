@@ -202,6 +202,8 @@ BEBIDA_NOALC_TOKENS = {
     "gaseosa": "gaseosa",
     "everest o ginger": "ginger ale",
     "everest": "ginger ale",
+    "ginger": "ginger ale",
+    "ginger ale": "ginger ale",
     "agua": "agua",
     "hielo": "hielo",
     "limón": "limón",
@@ -345,6 +347,13 @@ def resumen_bebidas(df_aportes: pd.DataFrame):
     total_alc = int(df_tmp["cant_bebida_alcoholica"].sum())
     total_noalc = int(df_tmp["cant_bebida_no_alcoholica"].sum())
     return total_alc, total_noalc
+
+def estado_rango(total, minimo, maximo):
+    if total < minimo:
+        return "Por debajo del rango ⚠️"
+    if total > maximo:
+        return "Por encima del rango ⚠️"
+    return "Dentro del rango ✅"
 
 # ---------- APP STREAMLIT ----------
 
@@ -702,21 +711,57 @@ def main():
 
     total_alc, total_noalc = resumen_bebidas(df_aportes)
 
+    # Desagregamos alcohólicas en cerveza / vino / otros licores
+    df_tmp = df_aportes.copy()
+    df_tmp["cant_bebida_alcoholica"] = df_tmp["cant_bebida_alcoholica"].apply(safe_int)
+
+    total_cerveza = df_tmp[
+        df_tmp["bebida_alcoholica"].str.contains("cerveza", case=False, na=False)
+    ]["cant_bebida_alcoholica"].sum()
+
+    total_vino = df_tmp[
+        df_tmp["bebida_alcoholica"].str.contains("vino", case=False, na=False)
+    ]["cant_bebida_alcoholica"].sum()
+
+    total_licores = total_alc - total_cerveza - total_vino
+
+    # Rangos según tu resumen
+    RANGO_CERVEZA = (5, 6)   # six-packs
+    RANGO_VINO = (3, 4)      # botellas
+    RANGO_LICORES = (3, 4)   # botellas mezcladas
+    RANGO_NOALC = (0, 6)     # hasta 6 botellas grandes
+
     filas_beb = [
         {
-            "Tipo": "Bebidas alcohólicas",
-            "Cantidad registrada": total_alc,
+            "Tipo": "Cerveza (six-pack)",
+            "Cantidad registrada": int(total_cerveza),
+            "Sugerido": "5 – 6",
+            "Estado": estado_rango(total_cerveza, *RANGO_CERVEZA),
         },
         {
-            "Tipo": "Bebidas no alcohólicas / ingredientes",
-            "Cantidad registrada": total_noalc,
+            "Tipo": "Vino (botellas)",
+            "Cantidad registrada": int(total_vino),
+            "Sugerido": "3 – 4",
+            "Estado": estado_rango(total_vino, *RANGO_VINO),
+        },
+        {
+            "Tipo": "Licores (pisco, ron, whisky…) botellas",
+            "Cantidad registrada": int(total_licores),
+            "Sugerido": "3 – 4",
+            "Estado": estado_rango(total_licores, *RANGO_LICORES),
+        },
+        {
+            "Tipo": "Bebidas sin alcohol / ingredientes (botellas grandes)",
+            "Cantidad registrada": int(total_noalc),
+            "Sugerido": "hasta 6",
+            "Estado": estado_rango(total_noalc, *RANGO_NOALC),
         },
     ]
 
     df_beb = pd.DataFrame(filas_beb)
     st.dataframe(df_beb, use_container_width=True, hide_index=True)
 
-    # Tarjeta con tu resumen rápido de máximos recomendados
+    # Tarjeta con tu resumen rápido
     st.markdown(
         """
         <div style="
