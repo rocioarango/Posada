@@ -10,19 +10,6 @@ ARCHIVO_APORTES = Path("aportes.csv")
 # Imagen de portada (debe estar en el mismo repo)
 IMAGEN_PORTADA = "portada_posada.jpeg"  # cambia el nombre si quieres
 
-# Opciones y cupos máximos
-OPCIONES = {
-    1: {"nombre": "Alfajores",                 "max": 2},
-    2: {"nombre": "Petipanes para todos",      "max": 1},
-    3: {"nombre": "Empanaditas surtidas",      "max": 2},
-    4: {"nombre": "Wafers o dulces",           "max": 2},
-    5: {"nombre": "Chips / chifles / papitas", "max": 3},
-    6: {"nombre": "Gaseosa grande",            "max": 3},
-    7: {"nombre": "Bebida no alcohólica",      "max": 3},
-    8: {"nombre": "Bebida alcohólica",         "max": 3},
-    9: {"nombre": "Otro (especificar)",        "max": 2},
-}
-
 # Lista fija de participantes (menú desplegable)
 PARTICIPANTES = [
     "Katherine Silvestre",
@@ -45,6 +32,39 @@ PARTICIPANTES = [
     "Ricardo Céspedes",
 ]
 
+# Listas por categoría (como la imagen que mandaste)
+LISTA_PIQUEOS = [
+    "Alfajores",
+    "Petipan de pollo",
+    "Empanaditas surtidas",
+    "Cheetos y chizitos",
+    "Waffers y dulces",
+    "Minitriples de jamón y queso",
+    "Tamal",
+    "Papás, chifles, camotes y chifles",
+    "Otro (indicar)",
+]
+
+LISTA_BEBIDAS_ALC = [
+    "Ninguna",
+    "Pisco",
+    "Cerveza",
+    "Vino",
+    "Ron",
+    "Otro (indicar)",
+]
+
+LISTA_BEBIDAS_NO_ALC = [
+    "Ninguna",
+    "Gaseosa",
+    "Everest",
+    "Agua",
+    "Hielo",
+    "Limón",
+    "Otro (indicar)",
+]
+
+
 # ---------- FUNCIONES AUXILIARES ----------
 
 def cargar_aportes():
@@ -52,26 +72,22 @@ def cargar_aportes():
     if ARCHIVO_APORTES.exists():
         return pd.read_csv(ARCHIVO_APORTES, dtype=str)
     else:
-        return pd.DataFrame(columns=["nombre", "opcion", "detalle"])
+        return pd.DataFrame(
+            columns=[
+                "nombre",
+                "piqueo",
+                "cant_piqueo",
+                "bebida_alcoholica",
+                "cant_bebida_alcoholica",
+                "bebida_no_alcoholica",
+                "cant_bebida_no_alcoholica",
+            ]
+        )
 
 
 def guardar_aportes(df_aportes: pd.DataFrame):
     """Guarda los aportes en CSV."""
     df_aportes.to_csv(ARCHIVO_APORTES, index=False, encoding="utf-8")
-
-
-def contar_cupos_usados(df_aportes: pd.DataFrame):
-    """Cuenta cuántas veces se ha elegido cada opción."""
-    usados = {num: 0 for num in OPCIONES.keys()}
-    if not df_aportes.empty:
-        for _, fila in df_aportes.iterrows():
-            try:
-                num = int(fila["opcion"])
-                if num in usados:
-                    usados[num] += 1
-            except (ValueError, TypeError):
-                continue
-    return usados
 
 
 # ---------- APP STREAMLIT ----------
@@ -115,11 +131,6 @@ def main():
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             border: 1px solid #f0e0d2;
         }
-
-        /* Tabla compacta */
-        .small-table td, .small-table th {
-            font-size: 0.85rem !important;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -130,118 +141,201 @@ def main():
         st.image(IMAGEN_PORTADA, use_column_width=True)
     st.markdown('<div class="titulo-principal">🎄 Aportes Posada Territorial 2025 🎁</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="subtitulo">Elige qué vas a llevar para que la mesa quede súper variada y rica ✨</div>',
+        '<div class="subtitulo">Registra tu piqueo y tus bebidas para organizar mejor la mesa ✨</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ---- AVISO IMPORTANTE AÑADIDO ----
+    st.markdown(
+        """
+        <div style="
+            background-color:#fff2e6;
+            padding:12px 18px;
+            border-radius:8px;
+            border:1px solid #f5c09a;
+            font-size:0.95rem;
+            color:#5a3c2c;
+            margin-top:10px;
+            text-align:justify;">
+            ⚠️ <strong>Aviso importante:</strong><br>
+            Teniendo en cuenta que somos <strong>18 personas</strong>, sería ideal que, en la medida de lo posible,
+            los productos puedan traerse en sus <strong>presentaciones grandes o familiares</strong>,
+            para que todos podamos compartir sin problema. 🫶✨
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
     # Cargamos aportes actuales
     df_aportes = cargar_aportes()
-    cupos_usados = contar_cupos_usados(df_aportes)
 
-    # ---- Layout en columnas: izquierda formulario, derecha resumen ----
-    col_izq, col_der = st.columns([1.1, 0.9])
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ----- Columna derecha: opciones y cupos -----
+    # ---- Layout: izquierda formulario, derecha tabla de referencia ----
+    col_izq, col_der = st.columns([1.2, 0.8])
+
+    # ---------- COLUMNA DERECHA: LISTA DE OPCIONES ----------
     with col_der:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("🍽️ Opciones y cupos")
+        st.subheader("📋 Lista de ideas")
 
-        tabla_opciones = []
-        for num, info in OPCIONES.items():
-            usados = cupos_usados[num]
-            maximo = info["max"]
-            lleno = usados >= maximo
-            estado = "✅ Disponible" if not lleno else "🚫 LLENO"
-            tabla_opciones.append(
-                {
-                    "N.º": num,
-                    "Opción": info["nombre"],
-                    "Usados": f"{usados}/{maximo}",
-                    "Estado": estado,
-                }
-            )
+        col_piq, col_alc, col_noalc = st.columns(3)
+        with col_piq:
+            st.markdown("**Lista de piqueos**")
+            for item in LISTA_PIQUEOS:
+                st.write(f"- {item}")
+        with col_alc:
+            st.markdown("**Bebidas alcohólicas**")
+            for item in LISTA_BEBIDAS_ALC[1:]:  # saltamos "Ninguna"
+                st.write(f"- {item}")
+        with col_noalc:
+            st.markdown("**Bebidas no alcohólicas**")
+            for item in LISTA_BEBIDAS_NO_ALC[1:]:  # saltamos "Ninguna"
+                st.write(f"- {item}")
 
-        df_tabla = pd.DataFrame(tabla_opciones)
-        st.table(df_tabla)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Verificar si todo está lleno
-    if all(cupos_usados[n] >= OPCIONES[n]["max"] for n in OPCIONES):
-        st.warning("⚠️ Todas las opciones están llenas. ¡Ya no hay cupos disponibles!")
-        if not df_aportes.empty:
-            st.subheader("Aportes registrados")
-            st.dataframe(df_aportes, use_container_width=True)
-        return
-
-    # ----- Columna izquierda: formulario -----
+    # ---------- COLUMNA IZQUIERDA: FORMULARIO ----------
     with col_izq:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📝 Registrar tu aporte")
 
         with st.form("form_aporte"):
-            nombre = st.selectbox(
-                "Selecciona tu nombre:",
-                PARTICIPANTES,
+            # Nombre
+            nombre = st.selectbox("Selecciona tu nombre:", PARTICIPANTES)
+
+            # --- Piqueo ---
+            st.markdown("#### 🧀 Piqueo")
+            piqueo_sel = st.selectbox("¿Qué piqueo vas a llevar?", LISTA_PIQUEOS)
+            piqueo_otro = ""
+            if piqueo_sel == "Otro (indicar)":
+                piqueo_otro = st.text_input("Indica el piqueo:")
+            cant_piqueo = st.number_input(
+                "Cantidad de piqueo (unidades / porciones):",
+                min_value=0,
+                step=1,
+                value=0,
             )
 
-            # Selectbox con todas las opciones, indicando cupos
-            def etiqueta_opcion(num):
-                info = OPCIONES[num]
-                usados = cupos_usados[num]
-                maximo = info["max"]
-                lleno = " – 🚫 LLENO" if usados >= maximo else ""
-                return f"{num}. {info['nombre']} ({usados}/{maximo}){lleno}"
-
-            opcion_seleccionada = st.selectbox(
-                "Elige la opción que vas a llevar:",
-                options=list(OPCIONES.keys()),
-                format_func=etiqueta_opcion,
+            # --- Bebida alcohólica ---
+            st.markdown("#### 🍷 Bebida alcohólica (opcional)")
+            beb_alc_sel = st.selectbox(
+                "Si llevarás bebida alcohólica, elige una:",
+                LISTA_BEBIDAS_ALC,
+            )
+            beb_alc_otro = ""
+            if beb_alc_sel == "Otro (indicar)":
+                beb_alc_otro = st.text_input("Indica la bebida alcohólica:")
+            cant_beb_alc = st.number_input(
+                "Cantidad (botellas / six pack / unidades):",
+                min_value=0,
+                step=1,
+                value=0,
+                key="cant_beb_alc",
             )
 
-            detalle = ""
-            if opcion_seleccionada == 9:
-                detalle = st.text_input("Describe brevemente qué vas a llevar (Otro):")
+            # --- Bebida no alcohólica ---
+            st.markdown("#### 🥤 Bebida no alcohólica (opcional)")
+            beb_noalc_sel = st.selectbox(
+                "Si llevarás bebida no alcohólica, elige una:",
+                LISTA_BEBIDAS_NO_ALC,
+            )
+            beb_noalc_otro = ""
+            if beb_noalc_sel == "Otro (indicar)":
+                beb_noalc_otro = st.text_input("Indica la bebida no alcohólica:")
+            cant_beb_noalc = st.number_input(
+                "Cantidad (botellas / litros / unidades):",
+                min_value=0,
+                step=1,
+                value=0,
+                key="cant_beb_noalc",
+            )
 
             enviado = st.form_submit_button("✅ Registrar aporte")
 
-        # Procesar envío
+        # ---------- PROCESAR ENVÍO ----------
         if enviado:
+            # Validación nombre
             if not nombre.strip():
                 st.error("Por favor selecciona tu nombre.")
                 st.stop()
 
-            # Evitar duplicados por persona
+            # Evitar duplicados
             if not df_aportes.empty and nombre in df_aportes["nombre"].values:
-                st.error("Ya registraste tu aporte antes. Si necesitas cambiarlo, avisa a la organización.")
+                st.error("Ya registraste tu aporte. Si necesitas cambiarlo, avisa a la organización.")
                 st.stop()
 
-            opcion = int(opcion_seleccionada)
+            # Resolver textos finales para cada categoría
+            # Piqueo
+            if piqueo_sel == "Otro (indicar)":
+                if not piqueo_otro.strip():
+                    st.error("Especifica qué piqueo llevarás en 'Otro (indicar)'.")
+                    st.stop()
+                piqueo_final = piqueo_otro.strip()
+            else:
+                piqueo_final = piqueo_sel
 
-            if opcion not in OPCIONES:
-                st.error("La opción seleccionada no existe.")
+            # Bebida alcohólica
+            if beb_alc_sel == "Ninguna":
+                beb_alc_final = ""
+                cant_beb_alc_final = 0
+            else:
+                if beb_alc_sel == "Otro (indicar)":
+                    if not beb_alc_otro.strip():
+                        st.error("Especifica qué bebida alcohólica llevarás en 'Otro (indicar)'.")
+                        st.stop()
+                    beb_alc_final = beb_alc_otro.strip()
+                else:
+                    beb_alc_final = beb_alc_sel
+                cant_beb_alc_final = int(cant_beb_alc)
+
+            # Bebida no alcohólica
+            if beb_noalc_sel == "Ninguna":
+                beb_noalc_final = ""
+                cant_beb_noalc_final = 0
+            else:
+                if beb_noalc_sel == "Otro (indicar)":
+                    if not beb_noalc_otro.strip():
+                        st.error("Especifica qué bebida no alcohólica llevarás en 'Otro (indicar)'.")
+                        st.stop()
+                    beb_noalc_final = beb_noalc_otro.strip()
+                else:
+                    beb_noalc_final = beb_noalc_sel
+                cant_beb_noalc_final = int(cant_beb_noalc)
+
+            # Validar cantidades:
+            if cant_piqueo <= 0:
+                st.error("Por favor indica la cantidad de piqueo (mayor a 0).")
                 st.stop()
 
-            if cupos_usados[opcion] >= OPCIONES[opcion]["max"]:
-                st.error("Esa opción ya está llena, por favor elige otra.")
+            if beb_alc_final and cant_beb_alc_final <= 0:
+                st.error("Si vas a llevar bebida alcohólica, indica una cantidad mayor a 0.")
                 st.stop()
 
-            if opcion == 9 and not detalle.strip():
-                st.error("Por favor describe qué vas a llevar en 'Otro'.")
+            if beb_noalc_final and cant_beb_noalc_final <= 0:
+                st.error("Si vas a llevar bebida no alcohólica, indica una cantidad mayor a 0.")
                 st.stop()
 
-            # Agregar aporte
+            # Crear registro
             nuevo = {
                 "nombre": nombre.strip(),
-                "opcion": str(opcion),
-                "detalle": detalle.strip() if detalle else "",
+                "piqueo": piqueo_final,
+                "cant_piqueo": int(cant_piqueo),
+                "bebida_alcoholica": beb_alc_final,
+                "cant_bebida_alcoholica": cant_beb_alc_final,
+                "bebida_no_alcoholica": beb_noalc_final,
+                "cant_bebida_no_alcoholica": cant_beb_noalc_final,
             }
 
             df_aportes = pd.concat([df_aportes, pd.DataFrame([nuevo])], ignore_index=True)
             guardar_aportes(df_aportes)
 
-            st.success(f"¡Listo, {nombre}! Llevarás **{OPCIONES[opcion]['nombre']}** 🎉")
-            if detalle:
-                st.info(f"Detalle: {detalle}")
+            msg = f"¡Listo, {nombre}! Llevarás **{cant_piqueo}** de **{piqueo_final}**"
+            if beb_alc_final:
+                msg += f", **{cant_beb_alc_final}** de **{beb_alc_final}**"
+            if beb_noalc_final:
+                msg += f", y **{cant_beb_noalc_final}** de **{beb_noalc_final}**"
+            st.success(msg + " 🎉")
 
             st.rerun()
 
@@ -254,22 +348,20 @@ def main():
         st.subheader("📋 Aportes registrados hasta ahora")
 
         df_mostrar = df_aportes.copy()
-        df_mostrar["opcion_desc"] = df_mostrar["opcion"].astype(int).map(
-            {k: v["nombre"] for k, v in OPCIONES.items()}
-        )
-        df_mostrar = df_mostrar[["nombre", "opcion_desc", "detalle"]]
         df_mostrar.rename(
             columns={
                 "nombre": "Nombre",
-                "opcion_desc": "Opción elegida",
-                "detalle": "Detalle",
+                "piqueo": "Piqueo",
+                "cant_piqueo": "Cantidad piqueo",
+                "bebida_alcoholica": "Bebida alcohólica",
+                "cant_bebida_alcoholica": "Cantidad beb. alcohólica",
+                "bebida_no_alcoholica": "Bebida no alcohólica",
+                "cant_bebida_no_alcoholica": "Cantidad beb. no alcohólica",
             },
             inplace=True,
         )
 
-        # Ordenar por nombre para que se vea más organizado
         df_mostrar = df_mostrar.sort_values("Nombre").reset_index(drop=True)
-
         st.dataframe(df_mostrar, use_container_width=True)
 
         # Quiénes faltan
