@@ -46,7 +46,7 @@ LISTA_PIQUEOS = [
 LISTA_BEBIDAS_ALC = [
     "Pisco",
     "Cerveza",
-    "Vino tinto",
+    "Vino",
     "Ron",
     "Otro (indicar)",
 ]
@@ -175,8 +175,8 @@ RECIPES = {
         ],
     },
     "Vino tinto": {
-        "Tinto de verano": ["vino tinto", "gaseosa", "hielo"],
-        "Sangría": ["vino tinto", "frutas", "gaseosa", "azúcar", "hielo"],
+        "Tinto de verano": ["vino", "gaseosa", "hielo"],
+        "Sangría": ["vino", "frutas", "gaseosa", "azúcar", "hielo"],
     },
     "Ron": {
         "Mojito": ["ron", "hierbabuena", "limón", "azúcar", "agua con gas", "hielo"],
