@@ -9,7 +9,7 @@ ARCHIVO_APORTES = Path("aportes.csv")
 
 IMAGEN_PORTADA = "portada_posada.jpeg"  # cambia el nombre si quieres
 
-# Participantes (lista base, el orden visual se controla al usar sorted())
+# Participantes
 PARTICIPANTES = [
     "Katherine Silvestre",
     "Marden Ferruzo",
@@ -62,7 +62,44 @@ LISTA_BEBIDAS_NO_ALC = [
     "Otro (indicar)",
 ]
 
-# Cupos máximos por piqueo (número de PERSONAS)
+# ------------ CLASIFICACIÓN DE PIQUEOS ------------
+# Tipo lógico para mostrar en la tabla y aplicar reglas
+PIQUEO_TIPO_DEFAULT = {
+    "Alfajores": "Dulce",
+    "Petipan de pollo": "Preparado",
+    "Empanaditas surtidas": "Preparado",
+    "Cheetos y chizitos": "Snack en bolsa",
+    "Waffers y dulces": "Dulce",
+    "Minitriples de jamón y queso": "Preparado",
+    "Tamal": "Preparado",
+    "Papás, chifles, camotes y chifles": "Snack en bolsa",
+}
+
+# Unidad visible
+PIQUEO_UNIDAD = {
+    "Alfajores": "unidades (12–25)",
+    "Petipan de pollo": "fracción de ciento",
+    "Empanaditas surtidas": "fracción de ciento",
+    "Cheetos y chizitos": "bolsas grandes",
+    "Waffers y dulces": "porciones / paquetitos",
+    "Minitriples de jamón y queso": "fracción de ciento",
+    "Tamal": "unidades",
+    "Papás, chifles, camotes y chifles": "bolsas grandes",
+}
+
+# Texto de máximo sugerido (para mostrar en tabla)
+PIQUEO_MAX_TEXTO = {
+    "Alfajores": "≈25 unidades en total",
+    "Petipan de pollo": "≈40 unidades en total",
+    "Empanaditas surtidas": "≈25 unidades en total",
+    "Cheetos y chizitos": "Grupo snacks: máx. 6 bolsas",
+    "Waffers y dulces": "≈12 porciones",
+    "Minitriples de jamón y queso": "≈40 unidades en total",
+    "Tamal": "≈10 unidades",
+    "Papás, chifles, camotes y chifles": "Grupo snacks: máx. 6 bolsas",
+}
+
+# Cupos máximos por piqueo (NÚMERO DE PERSONAS que pueden llevar ese piqueo)
 PIQUEO_CUPOS_MAX = {
     "Alfajores": 3,
     "Petipan de pollo": 2,
@@ -72,7 +109,7 @@ PIQUEO_CUPOS_MAX = {
     "Minitriples de jamón y queso": 2,
     "Tamal": 2,
     "Papás, chifles, camotes y chifles": 3,
-    # "Otro (indicar)" sin límite
+    # "Otro (indicar)" sin límite de personas, pero sí puede tener reglas por tipo
 }
 
 # Config de cantidades por tipo de piqueo (1/8, 1/4, bolsas, unidades)
@@ -126,6 +163,10 @@ PIQUEO_CONFIG = {
         "person_max": 12,  # porciones por persona
     },
 }
+
+# Snacks en bolsa a los que se les aplica el límite global de bolsas
+BAG_PIQUEOS = ["Cheetos y chizitos", "Papás, chifles, camotes y chifles"]
+MAX_BOLSAS_GRUPO = 6  # total de bolsas grandes entre todos los snacks en bolsa
 
 # -------- Recetas de tragos (para mostrar "qué falta") --------
 RECIPES = {
@@ -192,6 +233,7 @@ def cargar_aportes():
     columnas = [
         "nombre",
         "piqueo",
+        "tipo_piqueo",  # nueva columna
         "cant_piqueo",
         "bebida_alcoholica",
         "cant_bebida_alcoholica",
@@ -218,6 +260,15 @@ def contar_piqueos(df_aportes: pd.DataFrame):
             if p in conteo:
                 conteo[p] += 1
     return conteo
+
+def contar_bolsas(df_aportes: pd.DataFrame):
+    """Cuenta el total de bolsas de snacks (Cheetos, Papas/chifles/camotes y 'Otro' marcado como snack en bolsa)."""
+    if df_aportes.empty:
+        return 0
+    df_tmp = df_aportes.copy()
+    df_tmp["cant_piqueo"] = df_tmp["cant_piqueo"].apply(safe_int)
+    mask = (df_tmp["piqueo"].isin(BAG_PIQUEOS)) | (df_tmp["tipo_piqueo"] == "Snack en bolsa")
+    return int(df_tmp.loc[mask, "cant_piqueo"].sum())
 
 def obtener_cantidad_piqueo(piqueo_sel: str):
     """Devuelve la cantidad de piqueo según su tipo (fracción, bolsas, unidades)."""
@@ -352,7 +403,29 @@ def main():
         st.image(IMAGEN_PORTADA, use_column_width=True)
 
     st.markdown('<div class="titulo-principal">🎄 Aportes Posada Territorial 2025</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitulo">Registra tu aporte ✨</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitulo">Registra tu piqueo y bebida de forma ordenada ✨</div>', unsafe_allow_html=True)
+
+    # Aviso inicial sugerido
+    st.markdown(
+        """
+        <div style="
+            background-color:#fff2e6;
+            padding:12px 18px;
+            border-radius:8px;
+            border:1px solid #f5c09a;
+            font-size:0.95rem;
+            color:#5a3c2c;
+            margin-top:10px;
+            text-align:justify;">
+            ⚠️ <strong>Sugerencia general:</strong><br>
+            Somos <strong>18 personas</strong>. Para que todos puedan probar de todo sin que sobre demasiado,
+            la idea es que los piqueos vengan en <strong>presentaciones grandes o para compartir</strong>
+            (bolsas familiares, fracciones de ciento, bandejas), y que en total no superemos, por ejemplo,
+            <strong>6 bolsas grandes de snacks</strong> y una cantidad razonable de dulces y preparados.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     df_aportes = cargar_aportes()
     conteo_piqueos = contar_piqueos(df_aportes)
@@ -362,7 +435,7 @@ def main():
     st.subheader("📝 Registrar aporte")
 
     with st.form("form_aporte"):
-        # Nombre: desplegable y ORDENADO A-Z
+        # Nombre: desplegable ordenado A-Z
         nombre = st.selectbox(
             "Selecciona tu nombre:",
             sorted(PARTICIPANTES),
@@ -373,8 +446,16 @@ def main():
         piqueo_sel = st.radio("¿Qué piqueo vas a llevar?", LISTA_PIQUEOS)
 
         piqueo_otro = ""
+        tipo_piqueo = ""
         if piqueo_sel == "Otro (indicar)":
             piqueo_otro = st.text_input("Indica el piqueo:")
+            tipo_piqueo = st.radio(
+                "¿Qué tipo de piqueo es?",
+                ["Snack en bolsa", "Preparado", "Dulce"],
+                horizontal=True,
+            )
+        else:
+            tipo_piqueo = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
 
         cant_piqueo = obtener_cantidad_piqueo(piqueo_sel)
 
@@ -433,24 +514,27 @@ def main():
 
     # ---------- PROCESAR ENVÍO ----------
     if enviado:
-        # Validación nombre
         if not nombre.strip():
             st.error("Selecciona tu nombre.")
             st.stop()
 
-        # Evitar duplicados
         if not df_aportes.empty and nombre in df_aportes["nombre"].values:
             st.error("Ya registraste tu aporte antes.")
             st.stop()
 
-        # Validar piqueo
+        # Piqueo final y tipo
         if piqueo_sel == "Otro (indicar)":
             if not piqueo_otro.strip():
                 st.error("Indica qué piqueo llevarás.")
                 st.stop()
+            if not tipo_piqueo:
+                st.error("Indica el tipo de piqueo (snack en bolsa, preparado o dulce).")
+                st.stop()
             piqueo_final = piqueo_otro.strip()
+            tipo_piqueo_final = tipo_piqueo
         else:
             piqueo_final = piqueo_sel
+            tipo_piqueo_final = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
             if piqueo_final in PIQUEO_CUPOS_MAX:
                 usados = conteo_piqueos[piqueo_final]
                 if usados >= PIQUEO_CUPOS_MAX[piqueo_final]:
@@ -460,6 +544,16 @@ def main():
         if cant_piqueo <= 0:
             st.error("Indica la cantidad de piqueo (mayor a 0).")
             st.stop()
+
+        # Validar límite global de bolsas para snacks en bolsa
+        if tipo_piqueo_final == "Snack en bolsa":
+            bolsas_actuales = contar_bolsas(df_aportes)
+            if bolsas_actuales + cant_piqueo > MAX_BOLSAS_GRUPO:
+                st.error(
+                    f"Con esas bolsas se superaría el máximo total de {MAX_BOLSAS_GRUPO} bolsas grandes "
+                    f"para snacks. Actualmente ya hay {bolsas_actuales}."
+                )
+                st.stop()
 
         # ---- Construir bebida alcohólica final ----
         if not beb_alc_sel:
@@ -508,6 +602,7 @@ def main():
         nuevo = {
             "nombre": nombre.strip(),
             "piqueo": piqueo_final,
+            "tipo_piqueo": tipo_piqueo_final,
             "cant_piqueo": int(cant_piqueo),
             "bebida_alcoholica": beb_alc_final,
             "cant_bebida_alcoholica": cant_beb_alc_final,
@@ -534,25 +629,42 @@ def main():
 
     # ---------- CARD: CUPOS Y TRAGOS ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("🍽️ Cupos por piqueo")
+    st.subheader("🍽️ Cupos y límites por piqueo")
 
     filas = []
     for p, maximo in PIQUEO_CUPOS_MAX.items():
         usados = conteo_piqueos[p]
-        quedan = maximo - usados
-        ok = quedan > 0
+        quedan_personas = maximo - usados
+        ok = quedan_personas > 0
+        tipo = PIQUEO_TIPO_DEFAULT.get(p, "")
+        unidad = PIQUEO_UNIDAD.get(p, "")
+        max_txt = PIQUEO_MAX_TEXTO.get(p, "")
         filas.append(
             {
                 "Piqueo": p,
-                "Registrados": usados,
-                "Máx. personas": maximo,
-                "Quedan": max(quedan, 0),
+                "Tipo": tipo,
+                "Unidad": unidad,
+                "Máx. sugerido": max_txt,
+                "Personas registradas": usados,
                 "Estado": "Disponible ✅" if ok else "Lleno 🚫",
             }
         )
 
     df_cupos = pd.DataFrame(filas)
     st.dataframe(df_cupos, use_container_width=True, hide_index=True)
+
+    # Info extra sobre bolsas
+    bolsas_actuales = contar_bolsas(df_aportes)
+    st.markdown(
+        f"""
+        <div style="margin-top:8px;font-size:0.9rem;color:#555;">
+        🧃 <strong>Snacks en bolsa (Cheetos, papas, chifles, camotes y similares):</strong><br>
+        Máximo total sugerido: <strong>{MAX_BOLSAS_GRUPO} bolsas grandes</strong> entre todos.<br>
+        Actualmente ya se han registrado <strong>{bolsas_actuales}</strong> bolsas.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown("---")
     st.subheader("🍹 Tragos posibles con lo que ya hay")
@@ -595,6 +707,7 @@ def main():
             columns={
                 "nombre": "Nombre",
                 "piqueo": "Piqueo",
+                "tipo_piqueo": "Tipo de piqueo",
                 "cant_piqueo": "Cant. piqueo",
                 "bebida_alcoholica": "Bebida alcohólica",
                 "cant_bebida_alcoholica": "Cant. beb. alcohólica",
@@ -605,6 +718,28 @@ def main():
         )
 
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+
+        # Quiénes faltan (CUADRO ROJO)
+        nombres_ya = set(df_aportes["nombre"].tolist())
+        faltan = [n for n in sorted(PARTICIPANTES) if n not in nombres_ya]
+        if faltan:
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:#ffecec;
+                    padding:10px 14px;
+                    border-radius:8px;
+                    border:1px solid #ff4d4f;
+                    margin-top:12px;
+                    color:#a8071a;
+                    font-size:0.95rem;">
+                    🔴 <strong>Faltan registrar sus aportes:</strong><br>
+                    {", ".join(faltan)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
         st.markdown('</div>', unsafe_allow_html=True)
 
 
