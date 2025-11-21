@@ -6,7 +6,6 @@ import streamlit as st
 
 # ---------- CONFIGURACIÓN ----------
 ARCHIVO_APORTES = Path("aportes.csv")
-
 IMAGEN_PORTADA = "portada_posada.jpeg"  # cambia el nombre si quieres
 
 # Participantes
@@ -425,107 +424,113 @@ def main():
     df_aportes = cargar_aportes()
     conteo_piqueos = contar_piqueos(df_aportes)
 
-    # ---------- FORMULARIO ----------
+    # ---------- FORMULARIO (SIN st.form) ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("📝 Registrar aporte")
 
-    with st.form("form_aporte"):
-        nombre = st.selectbox(
-            "Selecciona tu nombre:",
-            sorted(PARTICIPANTES),
+    nombre = st.selectbox(
+        "Selecciona tu nombre:",
+        sorted(PARTICIPANTES),
+        key="nombre",
+    )
+
+    # ---- Piqueo ----
+    st.markdown("#### 🧀 Piqueo")
+    piqueo_sel = st.radio(
+        "¿Qué piqueo vas a llevar?",
+        LISTA_PIQUEOS,
+        index=None,
+        key="piqueo_sel",
+    )
+
+    piqueo_otro = ""
+    tipo_piqueo = ""
+    if piqueo_sel == "Otro (indicar)":
+        piqueo_otro = st.text_input("Indica el piqueo:", key="piqueo_otro")
+        tipo_piqueo = st.radio(
+            "¿Qué tipo de piqueo es?",
+            ["Snack en bolsa", "Preparado", "Dulce"],
+            horizontal=True,
+            key="tipo_piqueo_otro",
         )
+    elif piqueo_sel:
+        tipo_piqueo = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
 
-        # ---- Piqueo ----
-        st.markdown("#### 🧀 Piqueo")
-        piqueo_sel = st.radio(
-            "¿Qué piqueo vas a llevar?",
-            LISTA_PIQUEOS,
-            index=None,
+    if piqueo_sel:
+        cant_piqueo, _ = obtener_cantidad_piqueo(piqueo_sel)
+    else:
+        cant_piqueo = 0
+
+    # ---- Bebida alcohólica ----
+    st.markdown("#### 🍷 Bebida alcohólica (opcional)")
+    beb_alc_raw = st.selectbox(
+        "Si llevarás bebida alcohólica, elige una (o deja vacío):",
+        ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
+        key="beb_alc_raw",
+    )
+    beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
+
+    beb_alc_otro = ""
+    if beb_alc_sel == "Otro (indicar)":
+        beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?", key="beb_alc_otro")
+
+    if beb_alc_sel == "Cerveza":
+        cant_beb_alc = st.number_input(
+            "Cantidad (six-pack de cerveza):",
+            min_value=0,
+            step=1,
+            value=0,
+            key="cant_beb_alc",
         )
+    elif beb_alc_sel:
+        cant_beb_alc = st.number_input(
+            "Cantidad (botellas / unidades):",
+            min_value=0,
+            step=1,
+            value=0,
+            key="cant_beb_alc",
+        )
+    else:
+        cant_beb_alc = 0
 
-        piqueo_otro = ""
-        tipo_piqueo = ""
-        if piqueo_sel == "Otro (indicar)":
-            piqueo_otro = st.text_input("Indica el piqueo:")
-            tipo_piqueo = st.radio(
-                "¿Qué tipo de piqueo es?",
-                ["Snack en bolsa", "Preparado", "Dulce"],
-                horizontal=True,
-            )
-        elif piqueo_sel:
-            tipo_piqueo = PIQUEO_TIPO_DEFAULT.get(piqueo_sel, "")
+    # ---- Bebida no alcohólica / ingredientes ----
+    st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
+    beb_noalc_raw = st.selectbox(
+        "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
+        ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
+        key="beb_noalc_raw",
+    )
+    beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
 
-        if piqueo_sel:
-            cant_piqueo, _ = obtener_cantidad_piqueo(piqueo_sel)
+    beb_noalc_otro = ""
+    if beb_noalc_sel == "Otro (indicar)":
+        beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?", key="beb_noalc_otro")
+
+    if beb_noalc_sel:
+        if beb_noalc_sel == "Hielo":
+            label_noalc = "Cantidad (bolsas de hielo):"
+        elif beb_noalc_sel == "Gaseosa":
+            label_noalc = "Cantidad (botellas de gaseosa):"
+        elif beb_noalc_sel == "Everest":
+            label_noalc = "Cantidad (botellas / latas de Everest):"
+        elif beb_noalc_sel == "Agua":
+            label_noalc = "Cantidad (botellas / bidones de agua):"
+        elif beb_noalc_sel == "Limón":
+            label_noalc = "Cantidad (unidades de limón):"
         else:
-            cant_piqueo = 0
+            label_noalc = "Cantidad (botellas / litros / unidades):"
 
-        # ---- Bebida alcohólica ----
-        st.markdown("#### 🍷 Bebida alcohólica (opcional)")
-        beb_alc_raw = st.selectbox(
-            "Si llevarás bebida alcohólica, elige una (o deja vacío):",
-            ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
+        cant_beb_noalc = st.number_input(
+            label_noalc,
+            min_value=0,
+            step=1,
+            value=0,
+            key="cant_beb_noalc",
         )
-        beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
+    else:
+        cant_beb_noalc = 0
 
-        beb_alc_otro = ""
-        if beb_alc_sel == "Otro (indicar)":
-            beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?")
-
-        if beb_alc_sel == "Cerveza":
-            cant_beb_alc = st.number_input(
-                "Cantidad (six-pack de cerveza):",
-                min_value=0,
-                step=1,
-                value=0,
-            )
-        elif beb_alc_sel:
-            cant_beb_alc = st.number_input(
-                "Cantidad (botellas / unidades):",
-                min_value=0,
-                step=1,
-                value=0,
-            )
-        else:
-            cant_beb_alc = 0
-
-        # ---- Bebida no alcohólica / ingredientes ----
-        st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
-        beb_noalc_raw = st.selectbox(
-            "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
-            ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
-        )
-        beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
-
-        beb_noalc_otro = ""
-        if beb_noalc_sel == "Otro (indicar)":
-            beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?")
-
-        if beb_noalc_sel:
-            # etiqueta dinámica según lo que elijan
-            if beb_noalc_sel == "Hielo":
-                label_noalc = "Cantidad (bolsas de hielo):"
-            elif beb_noalc_sel == "Gaseosa":
-                label_noalc = "Cantidad (botellas de gaseosa):"
-            elif beb_noalc_sel == "Everest":
-                label_noalc = "Cantidad (botellas / latas de Everest):"
-            elif beb_noalc_sel == "Agua":
-                label_noalc = "Cantidad (botellas / bidones de agua):"
-            elif beb_noalc_sel == "Limón":
-                label_noalc = "Cantidad (unidades de limón):"
-            else:
-                label_noalc = "Cantidad (botellas / litros / unidades):"
-
-            cant_beb_noalc = st.number_input(
-                label_noalc,
-                min_value=0,
-                step=1,
-                value=0,
-            )
-        else:
-            cant_beb_noalc = 0
-
-        enviado = st.form_submit_button("✅ Registrar aporte", use_container_width=True)
+    enviado = st.button("✅ Registrar aporte", use_container_width=True, key="btn_registrar")
 
     # ---------- PROCESAR ----------
     if enviado:
@@ -703,7 +708,7 @@ def main():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- REGISTROS Y QUIÉNES FALTAN ----------
+    # ---------- REGISTROS, FALTAN Y DESCARGA ----------
     if not df_aportes.empty:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📋 Aportes registrados")
@@ -731,6 +736,15 @@ def main():
         )
 
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+
+        # Botón para descargar respaldo
+        csv_bytes = df_aportes.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Descargar registros en CSV",
+            data=csv_bytes,
+            file_name="aportes_posada.csv",
+            mime="text/csv",
+        )
 
         nombres_ya = set(df_aportes["nombre"].tolist())
         faltan = [n for n in sorted(PARTICIPANTES) if n not in nombres_ya]
