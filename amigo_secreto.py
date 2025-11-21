@@ -9,7 +9,7 @@ ARCHIVO_APORTES = Path("aportes.csv")
 
 IMAGEN_PORTADA = "portada_posada.jpeg"  # cambia el nombre si quieres
 
-# Participantes (menú desplegable)
+# Participantes
 PARTICIPANTES = [
     "Katherine Silvestre",
     "Marden Ferruzo",
@@ -63,7 +63,7 @@ LISTA_BEBIDAS_NO_ALC = [
     "Otro (indicar)",
 ]
 
-# Cupos máximos por piqueo (personas que pueden elegirlo)
+# Cupos máximos por piqueo (número de personas)
 PIQUEO_CUPOS_MAX = {
     "Alfajores": 3,
     "Petipan de pollo": 2,
@@ -73,13 +73,12 @@ PIQUEO_CUPOS_MAX = {
     "Minitriples de jamón y queso": 2,
     "Tamal": 2,
     "Papás, chifles, camotes y chifles": 3,
-    # "Otro (indicar)" lo dejamos sin tope fijo
+    # "Otro (indicar)" sin límite
 }
 
 # ---------- FUNCIONES AUXILIARES ----------
 
 def cargar_aportes():
-    """Lee el archivo de aportes (si existe) y asegura las columnas correctas."""
     columnas = [
         "nombre",
         "piqueo",
@@ -91,24 +90,20 @@ def cargar_aportes():
     ]
     if ARCHIVO_APORTES.exists():
         df = pd.read_csv(ARCHIVO_APORTES, dtype=str)
-        # Creamos columnas que falten
         for c in columnas:
             if c not in df.columns:
                 df[c] = ""
-        # Nos quedamos solo con las que nos interesan (ignoramos 'opcion', 'detalle', etc.)
         df = df[columnas]
-        return df
     else:
-        return pd.DataFrame(columns=columnas)
+        df = pd.DataFrame(columns=columnas)
+    return df
 
 
 def guardar_aportes(df_aportes: pd.DataFrame):
-    """Guarda los aportes en CSV."""
     df_aportes.to_csv(ARCHIVO_APORTES, index=False, encoding="utf-8")
 
 
 def contar_piqueos(df_aportes: pd.DataFrame):
-    """Cuenta cuántas personas eligieron cada piqueo (solo los que tienen cupo definido)."""
     conteo = {p: 0 for p in PIQUEO_CUPOS_MAX.keys()}
     if not df_aportes.empty:
         for p in df_aportes["piqueo"]:
@@ -126,7 +121,7 @@ def main():
         layout="centered",
     )
 
-    # ---- Estilos personalizados ----
+    # ---- Estilos ----
     st.markdown(
         """
         <style>
@@ -162,6 +157,32 @@ def main():
             border-radius: 0.8rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             border: 1px solid #f0e0d2;
+        }
+
+        /* Botón principal más vistoso */
+        .stButton>button[kind="primary"] {
+            background: linear-gradient(135deg, #ff7f50, #ff4b8b);
+            color: white;
+            border-radius: 999px;
+            padding: 0.55rem 1.4rem;
+            border: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+        }
+        .stButton>button[kind="primary"]:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+            box-shadow: 0 5px 14px rgba(0,0,0,0.25);
+        }
+
+        /* Tabla de cupos más centrada */
+        .cuadro-cupos table {
+            width: 100%;
+        }
+        .cuadro-cupos th, .cuadro-cupos td {
+            text-align: center !important;
+            font-size: 0.85rem !important;
         }
         </style>
         """,
@@ -201,16 +222,15 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # Cargamos aportes
     df_aportes = cargar_aportes()
     conteo_piqueos = contar_piqueos(df_aportes)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ---- Layout: izquierda formulario, derecha opciones y cupos ----
+    # ---- Layout ----
     col_izq, col_der = st.columns([1.2, 0.8])
 
-    # ---------- DERECHA: Opciones y cupos ----------
+    # ---------- DERECHA: OPCIONES Y CUPOS ----------
     with col_der:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🍽️ Opciones y cupos (piqueos)")
@@ -223,38 +243,52 @@ def main():
             filas.append(
                 {
                     "Piqueo": p,
-                    "Personas registradas": usados,
-                    "Máximo": maximo,
+                    "Registradas": usados,
+                    "Máx": maximo,
                     "Quedan": max(0, quedan),
                     "Estado": estado,
                 }
             )
+
         df_cupos = pd.DataFrame(filas)
-        st.table(df_cupos)
+        # Estilo: sin índice y centrado
+        styler = df_cupos.style.hide(axis="index")
+        st.markdown('<div class="cuadro-cupos">', unsafe_allow_html=True)
+        st.table(styler)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---------- IZQUIERDA: Formulario ----------
+    # ---------- IZQUIERDA: FORMULARIO ----------
     with col_izq:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📝 Registrar tu aporte")
 
         with st.form("form_aporte"):
             # Nombre
-            nombre = st.selectbox("Selecciona tu nombre:", PARTICIPANTES)
+            nombre = st.selectbox("Selecciona tu nombre:", PARTICIPANTES, key="nombre")
 
             # --- Piqueo ---
             st.markdown("#### 🧀 Piqueo")
-            piqueo_sel = st.radio("¿Qué piqueo vas a llevar?", LISTA_PIQUEOS)
+            piqueo_sel = st.radio(
+                "¿Qué piqueo vas a llevar?",
+                LISTA_PIQUEOS,
+                key="piqueo_sel",
+            )
             piqueo_otro = ""
             if piqueo_sel == "Otro (indicar)":
-                piqueo_otro = st.text_input("Indica el piqueo:")
+                piqueo_otro = st.text_input(
+                    "Indica el piqueo:",
+                    key="piqueo_otro",
+                    placeholder="Ejemplo: hamburguesitas, pizza, etc.",
+                )
 
             cant_piqueo = st.number_input(
                 "Cantidad de piqueo (unidades / porciones):",
                 min_value=0,
                 step=1,
                 value=0,
+                key="cant_piqueo",
             )
 
             # --- Bebida alcohólica ---
@@ -262,10 +296,15 @@ def main():
             beb_alc_sel = st.radio(
                 "Si llevarás bebida alcohólica, elige una:",
                 LISTA_BEBIDAS_ALC,
+                key="beb_alc_sel",
             )
             beb_alc_otro = ""
             if beb_alc_sel == "Otro (indicar)":
-                beb_alc_otro = st.text_input("Indica la bebida alcohólica:")
+                beb_alc_otro = st.text_input(
+                    "Indica la bebida alcohólica:",
+                    key="beb_alc_otro",
+                    placeholder="Ejemplo: sangría, whisky, etc.",
+                )
             cant_beb_alc = st.number_input(
                 "Cantidad (botellas / six pack / unidades):",
                 min_value=0,
@@ -279,10 +318,15 @@ def main():
             beb_noalc_sel = st.radio(
                 "Si llevarás bebida no alcohólica, elige una:",
                 LISTA_BEBIDAS_NO_ALC,
+                key="beb_noalc_sel",
             )
             beb_noalc_otro = ""
             if beb_noalc_sel == "Otro (indicar)":
-                beb_noalc_otro = st.text_input("Indica la bebida no alcohólica:")
+                beb_noalc_otro = st.text_input(
+                    "Indica la bebida no alcohólica:",
+                    key="beb_noalc_otro",
+                    placeholder="Ejemplo: ponche, jugo de maracuyá, etc.",
+                )
             cant_beb_noalc = st.number_input(
                 "Cantidad (botellas / litros / unidades):",
                 min_value=0,
@@ -291,7 +335,7 @@ def main():
                 key="cant_beb_noalc",
             )
 
-            enviado = st.form_submit_button("✅ Registrar aporte")
+            enviado = st.form_submit_button("✅ Registrar aporte", use_container_width=True)
 
         # ---------- PROCESAR ENVÍO ----------
         if enviado:
@@ -305,7 +349,12 @@ def main():
                 st.error("Ya registraste tu aporte antes. Si necesitas cambiarlo, avisa a la organización.")
                 st.stop()
 
-            # Resolver texto piqueo
+            # Al menos una bebida
+            if beb_alc_sel == "Ninguna" and beb_noalc_sel == "Ninguna":
+                st.error("Elige al menos una bebida (alcohólica o no alcohólica).")
+                st.stop()
+
+            # Piqueo final
             if piqueo_sel == "Otro (indicar)":
                 if not piqueo_otro.strip():
                     st.error("Especifica qué piqueo llevarás en 'Otro (indicar)'.")
@@ -313,15 +362,14 @@ def main():
                 piqueo_final = piqueo_otro.strip()
             else:
                 piqueo_final = piqueo_sel
-
-                # Validar cupos de piqueo (solo si NO es "Otro")
+                # Validar cupos si tiene límite
                 if piqueo_final in PIQUEO_CUPOS_MAX:
                     usados = conteo_piqueos[piqueo_final]
                     if usados >= PIQUEO_CUPOS_MAX[piqueo_final]:
                         st.error("Ese piqueo ya alcanzó el máximo de personas. Por favor elige otro.")
                         st.stop()
 
-            # Resolver bebida alcohólica
+            # Bebida alcohólica final
             if beb_alc_sel == "Ninguna":
                 beb_alc_final = ""
                 cant_beb_alc_final = 0
@@ -335,7 +383,7 @@ def main():
                     beb_alc_final = beb_alc_sel
                 cant_beb_alc_final = int(cant_beb_alc)
 
-            # Resolver bebida no alcohólica
+            # Bebida no alcohólica final
             if beb_noalc_sel == "Ninguna":
                 beb_noalc_final = ""
                 cant_beb_noalc_final = 0
@@ -353,11 +401,9 @@ def main():
             if cant_piqueo <= 0:
                 st.error("Por favor indica la cantidad de piqueo (mayor a 0).")
                 st.stop()
-
             if beb_alc_final and cant_beb_alc_final <= 0:
                 st.error("Si vas a llevar bebida alcohólica, indica una cantidad mayor a 0.")
                 st.stop()
-
             if beb_noalc_final and cant_beb_noalc_final <= 0:
                 st.error("Si vas a llevar bebida no alcohólica, indica una cantidad mayor a 0.")
                 st.stop()
@@ -389,19 +435,23 @@ def main():
 
     st.markdown("---")
 
-    # ---- Aportes registrados ----
+    # ---- APORTES REGISTRADOS ----
     if not df_aportes.empty:
         st.subheader("📋 Aportes registrados hasta ahora")
 
         df_mostrar = df_aportes.copy()
 
-        # convertir cantidades a entero para que no salgan 4.0
-        for c in [
+        # Convertir cantidades a int (para que no salgan 4.0)
+        for col in [
             "cant_piqueo",
             "cant_bebida_alcoholica",
             "cant_bebida_no_alcoholica",
         ]:
-            df_mostrar[c] = pd.to_numeric(df_mostrar[c], errors="coerce").astype("Int64")
+            df_mostrar[col] = (
+                pd.to_numeric(df_mostrar[col], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
 
         df_mostrar.rename(
             columns={
@@ -417,7 +467,7 @@ def main():
         )
 
         df_mostrar = df_mostrar.sort_values("Nombre").reset_index(drop=True)
-        st.dataframe(df_mostrar, use_container_width=True)
+        st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
         # Quiénes faltan
         nombres_ya = set(df_aportes["nombre"].tolist())
@@ -426,15 +476,18 @@ def main():
             st.markdown(
                 """
                 <div style="
-                    background-color:#fff9d6;
+                    background-color:#fffbe6;
                     padding:10px 14px;
-                    border-radius:6px;
-                    border:1px solid #f0e19a;
-                    margin-top:10px;">
+                    border-radius:8px;
+                    border:1px solid #ffe58f;
+                    margin-top:12px;">
                 """,
                 unsafe_allow_html=True,
             )
-            st.write("Faltan registrar: " + ", ".join(faltan))
+            st.markdown(
+                "**Faltan registrar:** " + ", ".join(faltan),
+                unsafe_allow_html=True,
+            )
             st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.success("🎉 ¡Todos los participantes ya registraron su aporte!")
