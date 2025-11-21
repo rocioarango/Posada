@@ -48,7 +48,7 @@ LISTA_BEBIDAS_ALC = [
     "Ninguna",
     "Pisco",
     "Cerveza",
-    "Vino",
+    "Vino tinto",
     "Ron",
     "Otro (indicar)",
 ]
@@ -63,7 +63,7 @@ LISTA_BEBIDAS_NO_ALC = [
     "Otro (indicar)",
 ]
 
-# Cupos máximos por piqueo (número de personas)
+# Cupos máximos por piqueo (número de personas que pueden llevar ese piqueo)
 PIQUEO_CUPOS_MAX = {
     "Alfajores": 3,
     "Petipan de pollo": 2,
@@ -75,6 +75,112 @@ PIQUEO_CUPOS_MAX = {
     "Papás, chifles, camotes y chifles": 3,
     # "Otro (indicar)" sin límite
 }
+
+# -------- Config de cantidades de piqueo (por tipo) --------
+# Aquí definimos cómo se ingresa la cantidad y topes por persona
+PIQUEO_CONFIG = {
+    "Alfajores": {
+        "unit_type": "fraction_ciento",
+        "fraction_options": {
+            "1/8 de ciento (12 unidades)": 12,
+            "1/4 de ciento (25 unidades)": 25,
+        },
+        "person_max": 25,
+    },
+    "Petipan de pollo": {
+        "unit_type": "fraction_ciento",
+        "fraction_options": {
+            "1/8 de ciento (12 unidades)": 12,
+            "1/4 de ciento (25 unidades)": 25,
+        },
+        "person_max": 25,
+    },
+    "Empanaditas surtidas": {
+        "unit_type": "fraction_ciento",
+        "fraction_options": {
+            "1/8 de ciento (12 unidades)": 12,
+            "1/4 de ciento (25 unidades)": 25,
+        },
+        "person_max": 25,
+    },
+    "Minitriples de jamón y queso": {
+        "unit_type": "fraction_ciento",
+        "fraction_options": {
+            "1/8 de ciento (12 unidades)": 12,
+            "1/4 de ciento (25 unidades)": 25,
+        },
+        "person_max": 25,
+    },
+    "Cheetos y chizitos": {
+        "unit_type": "bags",
+        "person_max": 3,  # bolsas
+    },
+    "Papás, chifles, camotes y chifles": {
+        "unit_type": "bags",
+        "person_max": 3,  # bolsas
+    },
+    "Tamal": {
+        "unit_type": "units",
+        "person_max": 4,  # tamales
+    },
+    "Waffers y dulces": {
+        "unit_type": "units",
+        "person_max": 12,  # porciones
+    },
+}
+
+# -------- Recetas de tragos (para sugerencias) --------
+RECIPES = {
+    "Pisco": {
+        "Chilcano clásico": ["pisco", "ginger ale", "limón", "hielo"],
+        "Chilcano de maracuyá": [
+            "pisco",
+            "maracuyá",
+            "limón",
+            "azúcar",
+            "ginger ale",
+            "hielo",
+        ],
+    },
+    "Vino tinto": {
+        "Tinto de verano": ["vino tinto", "gaseosa", "hielo"],
+        "Sangría": ["vino tinto", "frutas", "gaseosa", "azúcar", "hielo"],
+    },
+    "Ron": {
+        "Mojito": ["ron", "hierbabuena", "limón", "azúcar", "agua con gas", "hielo"],
+        "Cuba libre": ["ron", "gaseosa cola", "hielo", "limón"],
+    },
+    "Whisky": {
+        "Whisky solo": ["whisky", "hielo"],
+    },
+    "Cerveza": {
+        "Cerveza sola": ["cerveza"],
+    },
+}
+
+# Normalización de nombres de bebidas para las recetas
+BEBIDA_ALC_TOKENS = {
+    "pisco": "pisco",
+    "cerveza": "cerveza",
+    "vino tinto": "vino tinto",
+    "vino": "vino tinto",
+    "ron": "ron",
+}
+
+BEBIDA_NOALC_TOKENS = {
+    "gaseosa": "gaseosa",
+    "everest": "ginger ale",  # ginger everest
+    "agua": "agua",
+    "hielo": "hielo",
+    "limón": "limón",
+}
+
+
+def normalizar(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    return s.strip().lower()
+
 
 # ---------- FUNCIONES AUXILIARES ----------
 
@@ -104,12 +210,87 @@ def guardar_aportes(df_aportes: pd.DataFrame):
 
 
 def contar_piqueos(df_aportes: pd.DataFrame):
+    """Cuenta cuántas PERSONAS llevan cada tipo de piqueo (para los cupos)."""
     conteo = {p: 0 for p in PIQUEO_CUPOS_MAX.keys()}
     if not df_aportes.empty:
         for p in df_aportes["piqueo"]:
             if p in conteo:
                 conteo[p] += 1
     return conteo
+
+
+def obtener_cantidad_piqueo(piqueo_sel: str):
+    """Muestra el input adecuado según el tipo de piqueo y devuelve cantidad (int)."""
+    if piqueo_sel not in PIQUEO_CONFIG:
+        # Para "Otro (indicar)" o cualquiera sin config específica
+        cant = st.number_input(
+            "Cantidad de piqueo (unidades / porciones):",
+            min_value=0,
+            step=1,
+            value=0,
+            key="cant_piqueo_generico",
+        )
+        return int(cant)
+
+    cfg = PIQUEO_CONFIG[piqueo_sel]
+    tipo = cfg["unit_type"]
+
+    if tipo == "fraction_ciento":
+        opcion = st.selectbox(
+            "Cantidad (elige fracción de ciento):",
+            list(cfg["fraction_options"].keys()),
+            key=f"frac_{piqueo_sel}",
+        )
+        unidades = cfg["fraction_options"][opcion]
+        unidades = min(unidades, cfg["person_max"])
+        return int(unidades)
+
+    if tipo == "bags":
+        cant = st.number_input(
+            "Cantidad de bolsas:",
+            min_value=0,
+            max_value=cfg["person_max"],
+            step=1,
+            value=0,
+            key=f"bags_{piqueo_sel}",
+        )
+        return int(cant)
+
+    # units
+    cant = st.number_input(
+        "Cantidad (unidades / porciones):",
+        min_value=0,
+        max_value=cfg["person_max"],
+        step=1,
+        value=0,
+        key=f"units_{piqueo_sel}",
+    )
+    return int(cant)
+
+
+def ingredientes_disponibles(df_aportes: pd.DataFrame):
+    """Devuelve un set con tokens de ingredientes/bebidas disponibles según lo registrado."""
+    tokens = set()
+
+    if df_aportes.empty:
+        return tokens
+
+    for _, row in df_aportes.iterrows():
+        # Bebida alcohólica base
+        beb_alc = normalizar(row.get("bebida_alcoholica", ""))
+        cant_alc = int(pd.to_numeric(row.get("cant_bebida_alcoholica", 0), errors="coerce") or 0)
+        if beb_alc and cant_alc > 0:
+            if beb_alc in BEBIDA_ALC_TOKENS:
+                tokens.add(BEBIDA_ALC_TOKENS[beb_alc])
+
+        # Bebida / ingrediente no alcohólico
+        beb_noalc = normalizar(row.get("bebida_no_alcoholica", ""))
+        cant_noalc = int(pd.to_numeric(row.get("cant_bebida_no_alcoholica", 0), errors="coerce") or 0)
+        if beb_noalc and cant_noalc > 0:
+            if beb_noalc in BEBIDA_NOALC_TOKENS:
+                tokens.add(BEBIDA_NOALC_TOKENS[beb_noalc])
+
+    return tokens
 
 
 # ---------- APP STREAMLIT ----------
@@ -230,7 +411,7 @@ def main():
     # ---- Layout ----
     col_izq, col_der = st.columns([1.2, 0.8])
 
-    # ---------- DERECHA: OPCIONES Y CUPOS ----------
+    # ---------- DERECHA: OPCIONES, CUPOS Y TRAGOS ----------
     with col_der:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🍽️ Opciones y cupos (piqueos)")
@@ -251,13 +432,40 @@ def main():
             )
 
         df_cupos = pd.DataFrame(filas)
-        # Estilo: sin índice y centrado
         styler = df_cupos.style.hide(axis="index")
         st.markdown('<div class="cuadro-cupos">', unsafe_allow_html=True)
         st.table(styler)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
+
+        # -------- Tragos posibles --------
+        st.subheader("🍹 Tragos posibles con lo que ya hay")
+
+        tokens = ingredientes_disponibles(df_aportes)
+        if not tokens:
+            st.markdown(
+                "<p style='font-size:0.9rem;color:#666;'>Aún no hay bebidas ni ingredientes suficientes registrados. "
+                "Cuando la gente empiece a registrar Pisco, Ron, Vino, etc., aquí verás qué tragos se pueden armar y qué falta. ✨</p>",
+                unsafe_allow_html=True,
+            )
+        else:
+            for base_bebida, recetas in RECIPES.items():
+                base_token = normalizar(base_bebida)
+                if base_token not in tokens:
+                    continue
+
+                st.markdown(f"**Con {base_bebida.lower()} se podría preparar:**")
+                for nombre_trago, ingredientes_req in recetas.items():
+                    faltan = [ing for ing in ingredientes_req if ing not in tokens]
+                    if not faltan:
+                        st.markdown(f"- ✅ *{nombre_trago}* (ya se puede preparar con lo que hay)")
+                    else:
+                        st.markdown(
+                            f"- ℹ️ *{nombre_trago}*: faltarían **{', '.join(faltan)}**"
+                        )
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- IZQUIERDA: FORMULARIO ----------
     with col_izq:
@@ -275,6 +483,7 @@ def main():
                 LISTA_PIQUEOS,
                 key="piqueo_sel",
             )
+
             piqueo_otro = ""
             if piqueo_sel == "Otro (indicar)":
                 piqueo_otro = st.text_input(
@@ -283,13 +492,8 @@ def main():
                     placeholder="Ejemplo: hamburguesitas, pizza, etc.",
                 )
 
-            cant_piqueo = st.number_input(
-                "Cantidad de piqueo (unidades / porciones):",
-                min_value=0,
-                step=1,
-                value=0,
-                key="cant_piqueo",
-            )
+            # Cantidad de piqueo según tipo
+            cant_piqueo = obtener_cantidad_piqueo(piqueo_sel)
 
             # --- Bebida alcohólica ---
             st.markdown("#### 🍷 Bebida alcohólica (opcional)")
@@ -305,27 +509,38 @@ def main():
                     key="beb_alc_otro",
                     placeholder="Ejemplo: sangría, whisky, etc.",
                 )
-            cant_beb_alc = st.number_input(
-                "Cantidad (botellas / six pack / unidades):",
-                min_value=0,
-                step=1,
-                value=0,
-                key="cant_beb_alc",
-            )
+
+            # Cantidad: cerveza en six-pack, resto en botellas
+            if beb_alc_sel == "Cerveza":
+                cant_beb_alc = st.number_input(
+                    "Cantidad (six-pack de cerveza):",
+                    min_value=0,
+                    step=1,
+                    value=0,
+                    key="cant_beb_alc_cerveza",
+                )
+            else:
+                cant_beb_alc = st.number_input(
+                    "Cantidad (botellas / unidades):",
+                    min_value=0,
+                    step=1,
+                    value=0,
+                    key="cant_beb_alc",
+                )
 
             # --- Bebida no alcohólica ---
-            st.markdown("#### 🥤 Bebida no alcohólica (opcional)")
+            st.markdown("#### 🥤 Bebida no alcohólica / ingredientes (opcional)")
             beb_noalc_sel = st.radio(
-                "Si llevarás bebida no alcohólica, elige una:",
+                "Si llevarás bebida no alcohólica o ingredientes, elige una:",
                 LISTA_BEBIDAS_NO_ALC,
                 key="beb_noalc_sel",
             )
             beb_noalc_otro = ""
             if beb_noalc_sel == "Otro (indicar)":
                 beb_noalc_otro = st.text_input(
-                    "Indica la bebida no alcohólica:",
+                    "Indica la bebida / ingrediente:",
                     key="beb_noalc_otro",
-                    placeholder="Ejemplo: ponche, jugo de maracuyá, etc.",
+                    placeholder="Ejemplo: ginger ale, hierbabuena, jugo de maracuyá, etc.",
                 )
             cant_beb_noalc = st.number_input(
                 "Cantidad (botellas / litros / unidades):",
@@ -344,14 +559,16 @@ def main():
                 st.error("Por favor selecciona tu nombre.")
                 st.stop()
 
-            # Evitar duplicados
+            # Evitar duplicados (si quieres permitir actualización, aquí se podría cambiar la lógica)
             if not df_aportes.empty and nombre in df_aportes["nombre"].values:
-                st.error("Ya registraste tu aporte antes. Si necesitas cambiarlo, avisa a la organización.")
+                st.error(
+                    "Ya registraste tu aporte antes. Si necesitas cambiarlo, avisa a la organización."
+                )
                 st.stop()
 
-            # Al menos una bebida
+            # Al menos una bebida (alcohólica o no alcohólica / ingrediente)
             if beb_alc_sel == "Ninguna" and beb_noalc_sel == "Ninguna":
-                st.error("Elige al menos una bebida (alcohólica o no alcohólica).")
+                st.error("Elige al menos una bebida (alcohólica o no alcohólica / ingrediente).")
                 st.stop()
 
             # Piqueo final
@@ -390,7 +607,7 @@ def main():
             else:
                 if beb_noalc_sel == "Otro (indicar)":
                     if not beb_noalc_otro.strip():
-                        st.error("Especifica qué bebida no alcohólica llevarás en 'Otro (indicar)'.")
+                        st.error("Especifica qué bebida no alcohólica / ingrediente llevarás en 'Otro (indicar)'.")
                         st.stop()
                     beb_noalc_final = beb_noalc_otro.strip()
                 else:
@@ -405,7 +622,7 @@ def main():
                 st.error("Si vas a llevar bebida alcohólica, indica una cantidad mayor a 0.")
                 st.stop()
             if beb_noalc_final and cant_beb_noalc_final <= 0:
-                st.error("Si vas a llevar bebida no alcohólica, indica una cantidad mayor a 0.")
+                st.error("Si vas a llevar bebida no alcohólica / ingrediente, indica una cantidad mayor a 0.")
                 st.stop()
 
             # Crear registro
@@ -424,14 +641,17 @@ def main():
 
             msg = f"¡Listo, {nombre}! Llevarás **{int(cant_piqueo)}** de **{piqueo_final}**"
             if beb_alc_final:
-                msg += f", **{cant_beb_alc_final}** de **{beb_alc_final}**"
+                if normalizar(beb_alc_final) == "cerveza":
+                    msg += f", **{cant_beb_alc_final}** six-pack de **{beb_alc_final}**"
+                else:
+                    msg += f", **{cant_beb_alc_final}** de **{beb_alc_final}**"
             if beb_noalc_final:
                 msg += f", y **{cant_beb_noalc_final}** de **{beb_noalc_final}**"
             st.success(msg + " 🎉")
 
             st.rerun()
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -460,8 +680,8 @@ def main():
                 "cant_piqueo": "Cant. piqueo",
                 "bebida_alcoholica": "Bebida alcohólica",
                 "cant_bebida_alcoholica": "Cant. beb. alcohólica",
-                "bebida_no_alcoholica": "Bebida no alcohólica",
-                "cant_bebida_no_alcoholica": "Cant. beb. no alcohólica",
+                "bebida_no_alcoholica": "Bebida no alcohólica / ingrediente",
+                "cant_bebida_no_alcoholica": "Cant. beb. no alcohólica / ingr.",
             },
             inplace=True,
         )
