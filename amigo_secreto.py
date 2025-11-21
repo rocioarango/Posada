@@ -53,7 +53,7 @@ LISTA_BEBIDAS_ALC = [
 
 LISTA_BEBIDAS_NO_ALC = [
     "Gaseosa",
-    "Everest",
+    "Everest o ginger",
     "Agua",
     "Hielo",
     "Limón",
