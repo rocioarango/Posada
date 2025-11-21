@@ -106,7 +106,7 @@ PIQUEO_CUPOS_MAX = {
     "Papás, chifles, camotes y chifles": 3,
 }
 
-# Config de cantidades
+# Config de cantidades por piqueo
 PIQUEO_CONFIG = {
     "Alfajores": {
         "unit_type": "fraction_ciento",
@@ -334,6 +334,24 @@ def ingredientes_disponibles(df_aportes: pd.DataFrame):
 
     return tokens
 
+def resumen_bebidas(df_aportes: pd.DataFrame):
+    """Totales simples de bebidas (lo declarado por las personas)."""
+    if df_aportes.empty:
+        return 0, 0
+    df_tmp = df_aportes.copy()
+    df_tmp["cant_bebida_alcoholica"] = df_tmp["cant_bebida_alcoholica"].apply(safe_int)
+    df_tmp["cant_bebida_no_alcoholica"] = df_tmp["cant_bebida_no_alcoholica"].apply(safe_int)
+    total_alc = int(df_tmp["cant_bebida_alcoholica"].sum())
+    total_noalc = int(df_tmp["cant_bebida_no_alcoholica"].sum())
+    return total_alc, total_noalc
+
+def estado_rango(total, minimo, maximo):
+    if total < minimo:
+        return f"Por debajo del mínimo ⚠️"
+    if total > maximo:
+        return f"Por encima del máximo ⚠️"
+    return "Dentro del rango ✅"
+
 # ---------- APP STREAMLIT ----------
 
 def main():
@@ -424,7 +442,7 @@ def main():
     df_aportes = cargar_aportes()
     conteo_piqueos = contar_piqueos(df_aportes)
 
-    # ---------- FORMULARIO (SIN st.form) ----------
+    # ---------- FORMULARIO ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("📝 Registrar aporte")
 
@@ -483,8 +501,9 @@ def main():
             key="cant_beb_alc",
         )
     elif beb_alc_sel:
+        # Aquí solo botellas, como pediste
         cant_beb_alc = st.number_input(
-            "Cantidad (botellas / unidades):",
+            "Cantidad (botellas):",
             min_value=0,
             step=1,
             value=0,
@@ -514,7 +533,8 @@ def main():
         elif beb_noalc_sel == "Everest":
             label_noalc = "Cantidad (botellas / latas de Everest):"
         elif beb_noalc_sel == "Agua":
-            label_noalc = "Cantidad (botellas / bidones de agua):"
+            # Agua: explicitamente litros o botellas
+            label_noalc = "Cantidad de agua (en litros o número de botellas):"
         elif beb_noalc_sel == "Limón":
             label_noalc = "Cantidad (unidades de limón):"
         else:
@@ -638,7 +658,7 @@ def main():
             if normalizar(beb_alc_final) == "cerveza":
                 msg += f", **{cant_beb_alc_final}** six-pack de **{beb_alc_final}**"
             else:
-                msg += f", **{cant_beb_alc_final}** de **{beb_alc_final}**"
+                msg += f", **{cant_beb_alc_final}** botellas de **{beb_alc_final}**"
         if beb_noalc_final:
             msg += f", y **{cant_beb_noalc_final}** de **{beb_noalc_final}**"
 
@@ -647,7 +667,7 @@ def main():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- CUPOS Y TRAGOS ----------
+    # ---------- CUPOS PIQUEOS ----------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🍽️ Cupos y límites por piqueo")
 
@@ -684,6 +704,45 @@ def main():
         unsafe_allow_html=True,
     )
 
+    # ---------- RESUMEN DE BEBIDAS ----------
+    st.markdown("---")
+    st.subheader("🥤 Resumen de bebidas (cupos sugeridos)")
+
+    total_alc, total_noalc = resumen_bebidas(df_aportes)
+
+    # Rango sugerido para 18 personas (simple y equilibrado)
+    RANGO_ALC = (6, 15)      # botellas / six-pack declarados
+    RANGO_NOALC = (10, 22)   # botellas / litros / unidades
+
+    filas_beb = [
+        {
+            "Tipo": "Bebidas alcohólicas",
+            "Cantidad registrada": total_alc,
+            "Rango sugerido": f"{RANGO_ALC[0]} – {RANGO_ALC[1]}",
+            "Estado": estado_rango(total_alc, *RANGO_ALC),
+        },
+        {
+            "Tipo": "Bebidas no alcohólicas / ingredientes",
+            "Cantidad registrada": total_noalc,
+            "Rango sugerido": f"{RANGO_NOALC[0]} – {RANGO_NOALC[1]}",
+            "Estado": estado_rango(total_noalc, *RANGO_NOALC),
+        },
+    ]
+
+    df_beb = pd.DataFrame(filas_beb)
+    st.dataframe(df_beb, use_container_width=True, hide_index=True)
+
+    st.markdown(
+        """
+        <div style="margin-top:6px;font-size:0.9rem;color:#555;">
+        💡 La idea es que haya <strong>suficiente bebida sin alcohol</strong> para preparar jugos, chilcanos,
+        sangrías, etc., y que la cantidad de alcohol sea razonable para 18 personas.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ---------- TRAGOS POSIBLES ----------
     st.markdown("---")
     st.subheader("🍹 Tragos posibles con lo que ya hay")
 
@@ -737,7 +796,7 @@ def main():
 
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
-        # Botón para descargar respaldo
+        # Botón descarga
         csv_bytes = df_aportes.to_csv(index=False).encode("utf-8")
         st.download_button(
             "⬇️ Descargar registros en CSV",
@@ -770,4 +829,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
