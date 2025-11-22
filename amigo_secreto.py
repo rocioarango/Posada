@@ -377,6 +377,7 @@ def main():
             font-weight: 700;
             text-align: center;
             color: #234;
+            margin-top: 1.4rem;
         }
         .subtitulo {
             text-align: center;
@@ -390,7 +391,7 @@ def main():
             border-radius: 0.8rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             border: 1px solid #f0e0d2;
-            margin-bottom: 1.2rem;
+            margin-bottom: 1.4rem;
         }
         .stButton>button[kind="primary"] {
             background: linear-gradient(135deg, #ff7f50, #ff4b8b);
@@ -413,12 +414,46 @@ def main():
         unsafe_allow_html=True,
     )
 
+    # ---- BARRA SUPERIOR TIPO WEB ----
+    st.markdown(
+        """
+        <div style="
+            width:100%;
+            padding:10px 18px;
+            background:#ffffff;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            border-bottom:1px solid #eee;
+            position:sticky;
+            top:0;
+            z-index:10;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1.2rem;">🎄</span>
+            <span style="font-weight:700;font-size:1.05rem;">Posada Territorial</span>
+          </div>
+          <div style="font-size:0.85rem;opacity:0.7;">
+            Unidad B · MINEDU
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ---- HERO / PORTADA ----
     if Path(IMAGEN_PORTADA).exists():
         st.image(IMAGEN_PORTADA, use_column_width=True)
 
-    st.markdown('<div class="titulo-principal">🎄 Aportes Posada Territorial 2025</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitulo">Registra tu piqueo y bebida de forma ordenada ✨</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="titulo-principal">Aportes Posada Territorial 2025</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="subtitulo">Registra tu piqueo y bebida de forma ordenada ✨</div>',
+        unsafe_allow_html=True,
+    )
 
+    # ---- CAJA DE SUGERENCIA (VERSIÓN MÁS CORTA) ----
     st.markdown(
         """
         <div style="
@@ -428,13 +463,16 @@ def main():
             border:1px solid #f5c09a;
             font-size:0.95rem;
             color:#5a3c2c;
-            margin-top:10px;
-            text-align:justify;">
-            ⚠️ <strong>Sugerencia general:</strong><br>
-            Somos <strong>18 personas</strong>. Para que todos puedan probar de todo sin que sobre demasiado,
-            la idea es que los piqueos vengan en <strong>presentaciones grandes o para compartir</strong>
-            (bolsas familiares, fracciones de ciento, bandejas), y que en total no superemos, por ejemplo,
-            <strong>6 bolsas grandes de snacks</strong> y una cantidad razonable de dulces y preparados.
+            margin-top:6px;
+            margin-bottom:18px;
+            text-align:left;">
+            ⚠️ <strong>Sugerencia general</strong><br>
+            <ul style="margin-top:6px; padding-left:18px;">
+              <li>Somos <strong>18 personas</strong>.</li>
+              <li>Máximo total sugerido: <strong>6 bolsas grandes de snacks</strong> entre todos.</li>
+              <li>Piensa en <strong>presentaciones para compartir</strong>: fracciones de ciento, bandejas, bolsas familiares.</li>
+            </ul>
+            La idea es que todos puedan probar de todo sin que sobre demasiado.
         </div>
         """,
         unsafe_allow_html=True,
@@ -534,7 +572,6 @@ def main():
         elif beb_noalc_sel == "Everest o ginger":
             label_noalc = "Cantidad (botellas):"
         elif beb_noalc_sel == "Agua":
-            # Agua: explicitamente litros o botellas
             label_noalc = "Cantidad de agua (en litros):"
         elif beb_noalc_sel == "Limón":
             label_noalc = "Cantidad (kg de limón):"
