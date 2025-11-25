@@ -30,7 +30,6 @@ PARTICIPANTES = [
     "Ricardo Céspedes",
 ]
 
-
 # --------- LISTAS ---------
 LISTA_PIQUEOS = [
     "Alfajores",
@@ -41,23 +40,6 @@ LISTA_PIQUEOS = [
     "Minitriples de jamón y queso",
     "Tamal",
     "Papás, chifles, camotes y chifles",
-    "Otro (indicar)",
-]
-
-LISTA_BEBIDAS_ALC = [
-    "Pisco",
-    "Cerveza",
-    "Vino",
-    "Ron",
-    "Otro (indicar)",
-]
-
-LISTA_BEBIDAS_NO_ALC = [
-    "Gaseosa",
-    "Everest o ginger",
-    "Agua",
-    "Hielo",
-    "Limón",
     "Otro (indicar)",
 ]
 
@@ -191,6 +173,47 @@ RECIPES = {
     },
 }
 
+# ---------- PACKS DE BEBIDAS ----------
+# tipo: "alcoholico" o "no_alcoholico"
+# base: para la condición de cerveza/vino y resumen
+PACKS = {
+    "Pack 1 – Chilcano clásico": {
+        "tipo": "alcoholico",
+        "base": "pisco",
+        "detalle": "Pisco + ginger ale + limón + hielo (coordinar entre las personas del pack).",
+    },
+    "Pack 2 – Pisco sour": {
+        "tipo": "alcoholico",
+        "base": "pisco",
+        "detalle": "Pisco + limón + huevos + azúcar + hielo (coordinar; requiere licuadora/coctelera).",
+    },
+    "Pack 3 – Mojito": {
+        "tipo": "alcoholico",
+        "base": "ron",
+        "detalle": "Ron + agua con gas + hierbabuena + limón + azúcar + hielo.",
+    },
+    "Pack 4 – Cuba libre": {
+        "tipo": "alcoholico",
+        "base": "ron",
+        "detalle": "Ron + gaseosa cola + limón.",
+    },
+    "Pack 5 – Sangría": {
+        "tipo": "alcoholico",
+        "base": "vino",
+        "detalle": "Vino tinto + gaseosa + frutas + azúcar.",
+    },
+    "Pack 6 – Cerveza": {
+        "tipo": "alcoholico",
+        "base": "cerveza",
+        "detalle": "Six-pack de cerveza + hielo. Se enfría en la refri del local.",
+    },
+    "Pack 7 – Sin alcohol (gaseosas, agua, jugos)": {
+        "tipo": "no_alcoholico",
+        "base": "",
+        "detalle": "Gaseosas, agua, jugos, hielo u otros ingredientes sin alcohol.",
+    },
+}
+
 # ---------- UTILIDADES ----------
 
 def normalizar(s: str) -> str:
@@ -218,7 +241,6 @@ def cargar_aportes():
         "bebida_no_alcoholica",
         "cant_bebida_no_alcoholica",
         "pack_codigo",
-        "pack_rol",
     ]
     if ARCHIVO_APORTES.exists():
         df = pd.read_csv(ARCHIVO_APORTES, dtype=str)
@@ -321,49 +343,67 @@ def ingredientes_disponibles(df_aportes: pd.DataFrame):
 
     return tokens
 
-def resumen_bebidas(df_aportes: pd.DataFrame):
-    if df_aportes.empty:
-        return 0, 0
-    df_tmp = df_aportes.copy()
-    df_tmp["cant_bebida_alcoholica"] = df_tmp["cant_bebida_alcoholica"].apply(safe_int)
-    df_tmp["cant_bebida_no_alcoholica"] = df_tmp["cant_bebida_no_alcoholica"].apply(safe_int)
-    total_alc = int(df_tmp["cant_bebida_alcoholica"].sum())
-    total_noalc = int(df_tmp["cant_bebida_no_alcoholica"].sum())
-    return total_alc, total_noalc
+def capacidad_pack(num_packs: int) -> int:
+    """Devuelve el cupo por pack según cuántos packs distintos haya en total."""
+    if num_packs <= 0:
+        return 0
+    if num_packs == 1:
+        return 18
+    if num_packs == 2:
+        return 9
+    if num_packs == 3:
+        return 6
+    if num_packs == 4:
+        return 5  # ejemplo 4-5-5-4
+    return 5
+
+def flags_packs(codigos):
+    """Devuelve (hay_no_alcoholico, hay_cerveza_o_vino)."""
+    hay_no_alc = False
+    hay_cerv_vino = False
+    for c in codigos:
+        meta = PACKS.get(c)
+        if not meta:
+            continue
+        if meta.get("tipo") == "no_alcoholico":
+            hay_no_alc = True
+        if meta.get("base") in ("cerveza", "vino"):
+            hay_cerv_vino = True
+    return hay_no_alc, hay_cerv_vino
 
 def resumen_packs(df_aportes: pd.DataFrame):
-    """Resumen por pack: personas, vacantes, etc."""
     if df_aportes.empty:
-        return pd.DataFrame(), 0, False
+        return pd.DataFrame(), 0, False, False
 
     df = df_aportes.copy()
     df["pack_codigo"] = df["pack_codigo"].astype(str).str.strip()
     df = df[df["pack_codigo"] != ""]
     if df.empty:
-        return pd.DataFrame(), 0, False
+        return pd.DataFrame(), 0, False, False
 
-    resumen = []
-    for pack, sub in df.groupby("pack_codigo"):
+    packs_activos = sorted(df["pack_codigo"].unique().tolist())
+    num_packs = len(packs_activos)
+    capacidad = capacidad_pack(num_packs)
+    hay_no_alc, hay_cerv_vino = flags_packs(packs_activos)
+
+    filas = []
+    for pack in packs_activos:
+        sub = df[df["pack_codigo"] == pack]
         personas = sub["nombre"].nunique()
-        vacantes = max(0, 3 - personas)
-        estado = "Completo ✅" if personas == 3 else f"En formación (faltan {vacantes})"
-        resumen.append(
+        vacantes = max(0, capacidad - personas)
+        estado = "Completo ✅" if personas >= capacidad else f"En formación (faltan {vacantes})"
+        filas.append(
             {
                 "Pack": pack,
                 "Personas en el pack": personas,
-                "Vacantes (de 3)": vacantes,
+                "Cupo máximo por pack": capacidad,
+                "Vacantes": vacantes,
                 "Estado": estado,
             }
         )
 
-    df_res = pd.DataFrame(resumen).sort_values("Pack")
-    num_packs = df_res.shape[0]
-    packs_lista = df_res["Pack"].tolist()
-
-    hay_cerveza_y_sangria = any("Cerveza" in p for p in packs_lista) and any(
-        "Sangría" in p or "Sangria" in p for p in packs_lista
-    )
-    return df_res, num_packs, hay_cerveza_y_sangria
+    df_res = pd.DataFrame(filas)
+    return df_res, num_packs, hay_no_alc, hay_cerv_vino
 
 
 # ---------- APP STREAMLIT ----------
@@ -444,32 +484,28 @@ def main():
             color:#5a3c2c;
             margin-top:10px;
             text-align:justify;">
-            ⚠️ <strong>¿Cómo nos organizamos?</strong><br>
-            
-            Somos <strong>18 personas</strong>.
-
-<ul> <li><strong>Piqueos:</strong> 
-Se lleva en <strong>presentación grande</strong> 
-(bandejas, fracciones de ciento o bolsas grandes). 
-Hay cupos para cada tipo de piqueo y, en total, 
-trataremos de no pasar de <strong>6 bolsas grandes</strong> de snacks.</li> 
-<li><strong>Bebidas:</strong> Funcionan por <strong>packs</strong>. 
-Cada pack se comparte entre <strong>3 personas</strong> (roles A, B y C). 
-<br>Ejemplo: una persona lleva el pisco, otra el ginger ale y otra el limón + hielo. 
-</li> <li>Si varias personas eligen el <strong>mismo pack</strong>, 
-forman un mini-equipo y deben <strong>coordinar entre ellas</strong> para dividir gastos 
-y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
- <li>No necesitamos demasiados packs distintos. <br>Si 
- los packs son sencillos, bastan <strong>3 packs</strong>
- diferentes para cubrir a los 18. <br>Si agregamos también
- un pack de <strong>Cerveza</strong> y uno de <strong>Sangría</strong>, 
- como máximo tendríamos <strong>4 packs</strong> en total.</li> <li>Las 
- cervezas se pueden enfriar en la <strong>refri del local</strong>.</li> </ul> </div>
-            
-         
-            
-            
-           
+        ⚠️ <strong>¿Cómo nos organizamos?</strong><br>
+        Somos <strong>18 personas</strong>.
+        <ul>
+          <li><strong>Piqueos:</strong> Se lleva en <strong>presentación grande</strong> 
+          (bandejas, fracciones de ciento o bolsas grandes). Hay cupos para cada tipo de piqueo y, en total, 
+          trataremos de no pasar de <strong>6 bolsas grandes</strong> de snacks.</li>
+          <li><strong>Bebidas:</strong> Funcionan por <strong>packs</strong>. 
+          Cada pack lo comparten varias personas. Dependiendo de cuántos packs haya en total:
+            <ul>
+              <li>Si hay <strong>3 packs</strong>, cada pack se reparte entre <strong>6 personas</strong> aprox.</li>
+              <li>Si llegamos a <strong>4 packs</strong>, se reparte algo así como <strong>4, 5, 5 y 4 personas</strong> por pack.</li>
+            </ul>
+          </li>
+          <li>Las personas que eligen el <strong>mismo pack</strong> forman un mini-equipo y deben 
+          <strong>coordinar entre ellas</strong> para dividir gastos y acordar quién lleva qué 
+          (botellas, mezclas, hielo, limón, etc.).</li>
+          <li>No necesitamos demasiados packs distintos. En general, con <strong>3 packs</strong> diferentes es suficiente para los 18. 
+          Solo si hay al menos un pack de <strong>Cerveza o Vino</strong> y también un pack 
+          <strong>sin alcohol</strong>, se permite llegar a <strong>4 packs</strong> en total.</li>
+          <li>Las cervezas se pueden enfriar en la <strong>refri del local</strong>.</li>
+        </ul>
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -514,251 +550,83 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
     else:
         cant_piqueo = 0
 
-    # ---------- PACKS DE BEBIDAS (SIN MODO MANUAL) ----------
-    PACKS = {
-        "A1 - Chilcano clásico": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Pisco",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 botella de pisco (base alcohólica para chilcanos).",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Ginger ale",
-                    "cant_beb_noalc": 1,
-                    "detalle": "1 botella de ginger ale.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Limón y hielo",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Limón + 1 bolsa de hielo.",
-                },
-            },
-            "equipo": "",
-        },
-        "A3 - Pisco sour clásico": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Pisco",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 botella de pisco (base para pisco sour).",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Huevos (docena) y azúcar",
-                    "cant_beb_noalc": 1,
-                    "detalle": "1 docena de huevos + azúcar.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Limón y hielo",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Limón + hielo.",
-                },
-            },
-            "equipo": "⚠️ Este pack requiere licuadora o coctelera.",
-        },
-        "B1 - Mojito": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Ron",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 botella de ron.",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Agua con gas",
-                    "cant_beb_noalc": 2,
-                    "detalle": "2 botellas de agua con gas.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Hierbabuena, limón, azúcar",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Hierbabuena + limón + azúcar (para mojito).",
-                },
-            },
-            "equipo": "",
-        },
-        "B2 - Cuba libre": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Ron",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 botella de ron.",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Gaseosa cola",
-                    "cant_beb_noalc": 1,
-                    "detalle": "1 botella de gaseosa cola.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Limón",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Limón para acompañar.",
-                },
-            },
-            "equipo": "",
-        },
-        "C1 - Sangría clásica": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Vino tinto",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 botella de vino tinto.",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Gaseosa",
-                    "cant_beb_noalc": 1,
-                    "detalle": "1 botella de gaseosa.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Fruta y azúcar",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Frutas picadas + azúcar.",
-                },
-            },
-            "equipo": "",
-        },
-        "D1 - Pack cerveza": {
-            "roles": {
-                "A": {
-                    "beb_alc": "Cerveza (six-pack)",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 six-pack de cerveza.",
-                },
-                "B": {
-                    "beb_alc": "Cerveza (six-pack)",
-                    "cant_beb_alc": 1,
-                    "beb_noalc": "",
-                    "cant_beb_noalc": 0,
-                    "detalle": "1 six-pack de cerveza adicional.",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Hielo",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Bolsas de hielo para las cervezas.",
-                },
-            },
-            "equipo": "Las cervezas se pueden enfriar en la refri del local.",
-        },
-        "E1 - Refrescos sin alcohol": {
-            "roles": {
-                "A": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Gaseosa",
-                    "cant_beb_noalc": 1,
-                    "detalle": "1 botella grande de gaseosa.",
-                },
-                "B": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Agua",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Agua (botella grande o varios litros).",
-                },
-                "C": {
-                    "beb_alc": "",
-                    "cant_beb_alc": 0,
-                    "beb_noalc": "Jugo y hielo",
-                    "cant_beb_noalc": 1,
-                    "detalle": "Jugo o té frío + 1 bolsa de hielo.",
-                },
-            },
-            "equipo": "",
-        },
-    }
-
+    # ---------- PACKS DE BEBIDAS ----------
     st.markdown("### 🍹 Packs de bebidas")
 
     pack_opciones = ["(Elige un pack)"] + list(PACKS.keys())
     pack_sel = st.selectbox(
-        "Elige un pack de bebidas (cada pack es para 3 personas: roles A, B y C):",
+        "Elige el pack de bebidas con el que quieres sumarte:",
         pack_opciones,
         key="pack_sel",
     )
 
+    # info sobre packs ya registrados
+    packs_actuales = set()
+    if not df_aportes.empty:
+        packs_actuales = set(df_aportes["pack_codigo"].astype(str).str.strip())
+        packs_actuales.discard("")
+
+    pack_codigo = ""
     beb_alc_final = ""
     cant_beb_alc_final = 0
     beb_noalc_final = ""
     cant_beb_noalc_final = 0
-    pack_codigo = ""
-    pack_rol = ""
-    rol_sel = None
 
     if pack_sel and pack_sel != "(Elige un pack)":
         pack_codigo = pack_sel
-        info_pack = PACKS[pack_sel]
 
-        # Cuántas personas ya están en este pack
-        personas_actuales = 0
+        # packs si esta persona también entra a este pack
+        packs_potenciales = set(packs_actuales)
+        packs_potenciales.add(pack_sel)
+        num_pot = len(packs_potenciales)
+        cap_pot = capacidad_pack(num_pot)
+        hay_no_alc, hay_cerv_vino = flags_packs(packs_potenciales)
+
+        if num_pot > 4:
+            st.error(
+                "Con este pack se pasarían de 4 packs distintos. "
+                "Elige uno de los packs que ya existen."
+            )
+
+        if num_pot == 4 and (not hay_no_alc or not hay_cerv_vino):
+            st.warning(
+                "Para tener 4 packs distintos, debe haber al menos un pack sin alcohol "
+                "y al menos un pack de cerveza o vino. Con esta combinación no se cumple."
+            )
+
+        personas_actuales_pack = 0
         if not df_aportes.empty:
-            personas_actuales = df_aportes.loc[
+            personas_actuales_pack = df_aportes.loc[
                 df_aportes["pack_codigo"] == pack_sel, "nombre"
             ].nunique()
-        vacantes_actuales = max(0, 3 - personas_actuales)
+
+        vacantes = max(0, cap_pot - personas_actuales_pack)
 
         st.markdown(
-            f"Actualmente este pack tiene <strong>{personas_actuales}</strong> persona(s) registrada(s). "
-            f"El pack es para <strong>3 personas</strong>, así que hay espacio para "
-            f"<strong>{vacantes_actuales}</strong> más (contándote a ti).",
+            f"Actualmente este pack tiene <strong>{personas_actuales_pack}</strong> persona(s) registrada(s). "
+            f"Este pack puede tener hasta <strong>{cap_pot}</strong> personas. "
+            f"Hay espacio para <strong>{vacantes}</strong> más (contándote a ti).",
             unsafe_allow_html=True,
         )
 
-        if personas_actuales >= 3:
-            st.error("Este pack ya está completo, elige otro pack.")
+        meta = PACKS.get(pack_sel, {})
+        detalle = meta.get("detalle", "")
+        if detalle:
+            st.markdown(f"**¿Qué implica este pack?** {detalle}")
+
+        # definimos una unidad simple para el resumen de bebidas
+        tipo = meta.get("tipo", "alcoholico")
+        base = meta.get("base", "")
+        if tipo == "alcoholico":
+            beb_alc_final = base if base else "Bebida alcohólica"
+            cant_beb_alc_final = 1
+            beb_noalc_final = ""
+            cant_beb_noalc_final = 0
         else:
-            rol_sel = st.radio(
-                "¿Qué parte del pack vas a llevar?",
-                ["A", "B", "C"],
-                key="rol_pack",
-            )
-            pack_rol = rol_sel
-
-            if info_pack.get("equipo"):
-                st.warning(info_pack["equipo"])
-
-            info_rol = info_pack["roles"].get(rol_sel)
-            if info_rol:
-                beb_alc_final = info_rol["beb_alc"]
-                cant_beb_alc_final = info_rol["cant_beb_alc"]
-                beb_noalc_final = info_rol["beb_noalc"]
-                cant_beb_noalc_final = info_rol["cant_beb_noalc"]
-
-                detalle = info_rol.get("detalle", "")
-                if detalle:
-                    st.markdown(f"**Tu aporte en este pack:** {detalle}")
+            beb_alc_final = ""
+            cant_beb_alc_final = 0
+            beb_noalc_final = "Pack sin alcohol / ingredientes"
+            cant_beb_noalc_final = 1
 
     enviado = st.button("✅ Registrar aporte", use_container_width=True, key="btn_registrar")
 
@@ -808,23 +676,44 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
                 st.stop()
 
         # Validación de pack
-        if not pack_codigo or not pack_rol:
-            st.error("Elige un pack de bebidas y tu rol dentro del pack.")
+        if not pack_codigo:
+            st.error("Elige un pack de bebidas.")
             st.stop()
 
-        # Recalcular personas en ese pack para no pasarnos de 3
-        personas_actuales = 0
+        # packs potenciales con este registro
+        packs_potenciales = set(packs_actuales)
+        packs_potenciales.add(pack_codigo)
+        num_pot = len(packs_potenciales)
+        cap_pot = capacidad_pack(num_pot)
+        hay_no_alc, hay_cerv_vino = flags_packs(packs_potenciales)
+
+        if num_pot > 4:
+            st.error(
+                "Con este pack se pasarían de 4 packs distintos. "
+                "Por favor, elige uno de los packs ya existentes."
+            )
+            st.stop()
+
+        if num_pot == 4 and (not hay_no_alc or not hay_cerv_vino):
+            st.error(
+                "Para tener 4 packs distintos debe haber al menos un pack sin alcohol "
+                "y al menos un pack de cerveza o vino. Con esta combinación no se cumple."
+            )
+            st.stop()
+
+        personas_actuales_pack = 0
         if not df_aportes.empty:
-            personas_actuales = df_aportes.loc[
+            personas_actuales_pack = df_aportes.loc[
                 df_aportes["pack_codigo"] == pack_codigo, "nombre"
             ].nunique()
-        if personas_actuales >= 3:
-            st.error("Este pack ya llegó a 3 personas. Elige otro pack.")
+
+        if personas_actuales_pack >= cap_pot:
+            st.error("Este pack ya llegó a su máximo de personas. Elige otro pack.")
             st.stop()
 
-        if (not beb_alc_final or cant_beb_alc_final <= 0) and (
-            not beb_noalc_final or cant_beb_noalc_final <= 0
-        ):
+        if (not beb_alc_final and not beb_noalc_final) or (
+            beb_alc_final and cant_beb_alc_final <= 0
+        ) or (beb_noalc_final and cant_beb_noalc_final <= 0):
             st.error("Hubo un problema al leer tu pack. Vuelve a seleccionarlo.")
             st.stop()
 
@@ -838,7 +727,6 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
             "bebida_no_alcoholica": beb_noalc_final,
             "cant_bebida_no_alcoholica": int(cant_beb_noalc_final),
             "pack_codigo": pack_codigo,
-            "pack_rol": pack_rol,
         }
 
         df_aportes = pd.concat([df_aportes, pd.DataFrame([nuevo])], ignore_index=True)
@@ -847,13 +735,13 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
         msg = f"¡Listo, {nombre}! Llevarás *{int(cant_piqueo)}* de *{piqueo_final}*"
         if beb_alc_final:
             if "cerveza" in normalizar(beb_alc_final):
-                msg += f", *{cant_beb_alc_final}* six-pack de *{beb_alc_final}*"
+                msg += f", *{cant_beb_alc_final}* aporte(s) de *{beb_alc_final}*"
             else:
-                msg += f", *{cant_beb_alc_final}* de *{beb_alc_final}*"
+                msg += f", *{cant_beb_alc_final}* aporte(s) de *{beb_alc_final}*"
         if beb_noalc_final:
             msg += f", y *{cant_beb_noalc_final}* de *{beb_noalc_final}*"
 
-        msg += f" (Pack: {pack_codigo}, rol {pack_rol})."
+        msg += f" (Pack elegido: {pack_codigo})."
         st.success(msg + " 🎉")
         st.rerun()
 
@@ -900,7 +788,7 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
     st.markdown("---")
     st.subheader("🍹 Resumen de packs de bebidas")
 
-    df_packs, num_packs, hay_cerveza_y_sangria = resumen_packs(df_aportes)
+    df_packs, num_packs, hay_no_alc, hay_cerv_vino = resumen_packs(df_aportes)
 
     if df_packs.empty:
         st.markdown(
@@ -914,18 +802,18 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
             f"<br>Actualmente hay <strong>{num_packs}</strong> pack(s) de bebidas distintos registrados."
         )
         if num_packs > 4:
-            texto_extra += " Es bastante variedad, revisen si realmente necesitan tantos packs diferentes. 😉"
-        elif num_packs > 3 and not hay_cerveza_y_sangria:
-            texto_extra += " Recuerden que la idea general es no pasar de 3 packs si son sencillos."
-        elif num_packs == 4 and hay_cerveza_y_sangria:
-            texto_extra += " Con cerveza y sangría se acepta hasta 4 packs, pero ya es tope."
+            texto_extra += " Esto supera el límite sugerido, revisen si pueden concentrar packs."
+        elif num_packs > 3 and not hay_no_alc:
+            texto_extra += " Consideren que al menos un pack debería ser sin alcohol."
+        elif num_packs == 4 and not hay_cerv_vino:
+            texto_extra += " Para 4 packs se espera que uno sea de cerveza o vino."
 
         st.markdown(
             f"""
             <div style="margin-top:6px;font-size:0.9rem;color:#555;text-align:justify;">
-            💡 Cada pack está pensado para 3 personas (A, B y C).<br>
-            Si ves que tu pack está en <strong>“En formación”</strong>, 
-            coordina con tus compas para que se sumen dos personas más y el pack quede completo.
+            💡 Cada persona elige un pack y se suma a ese grupo. 
+            Las personas del mismo pack se organizan entre ellas para repartir qué lleva cada una 
+            y dividir gastos de manera justa.
             {texto_extra}
             </div>
             """,
@@ -974,19 +862,17 @@ y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
                 "piqueo": "Piqueo",
                 "tipo_piqueo": "Tipo de piqueo",
                 "cant_piqueo": "Cant. piqueo",
-                "bebida_alcoholica": "Bebida alcohólica",
-                "cant_bebida_alcoholica": "Cant. beb. alcohólica",
+                "bebida_alcoholica": "Bebida alcohólica (base)",
+                "cant_bebida_alcoholica": "Aportes beb. alcohólica",
                 "bebida_no_alcoholica": "Bebida no alcohólica / ingrediente",
-                "cant_bebida_no_alcoholica": "Cant. beb. no alcohólica / ingr.",
+                "cant_bebida_no_alcoholica": "Aportes sin alcohol",
                 "pack_codigo": "Pack elegido",
-                "pack_rol": "Rol en el pack",
             },
             inplace=True,
         )
 
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
-        # Botón descarga
         csv_bytes = df_aportes.to_csv(index=False).encode("utf-8")
         st.download_button(
             "⬇️ Descargar registros en CSV",
