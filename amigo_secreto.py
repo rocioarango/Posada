@@ -480,76 +480,305 @@ def main():
     else:
         cant_piqueo = 0
 
-    # ---- Bebida alcohólica ----
-    st.markdown("#### 🍷 Bebida alcohólica (opcional)")
-    beb_alc_raw = st.selectbox(
-        "Si llevarás bebida alcohólica, elige una (o deja vacío):",
-        ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
-        key="beb_alc_raw",
-    )
-    beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
+    # ---------- PACKS DE BEBIDAS ----------
+    PACKS = {
+        "A1 - Chilcano clásico": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Pisco",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 botella de pisco (base alcohólica para chilcanos).",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Ginger ale",
+                    "cant_beb_noalc": 1,
+                    "detalle": "1 botella de ginger ale.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Limón y hielo",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Limón + 1 bolsa de hielo.",
+                },
+            },
+            "equipo": "",
+        },
+        "A3 - Pisco sour clásico": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Pisco",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 botella de pisco (base para pisco sour).",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Huevos (docena) y azúcar",
+                    "cant_beb_noalc": 1,
+                    "detalle": "1 docena de huevos + azúcar.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Limón y hielo",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Limón + hielo.",
+                },
+            },
+            "equipo": "⚠️ Este pack requiere licuadora o coctelera.",
+        },
+        "B1 - Mojito": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Ron",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 botella de ron.",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Agua con gas",
+                    "cant_beb_noalc": 2,
+                    "detalle": "2 botellas de agua con gas.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Hierbabuena, limón, azúcar",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Hierbabuena + limón + azúcar (para mojito).",
+                },
+            },
+            "equipo": "",
+        },
+        "B2 - Cuba libre": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Ron",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 botella de ron.",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Gaseosa cola",
+                    "cant_beb_noalc": 1,
+                    "detalle": "1 botella de gaseosa cola.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Limón",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Limón para acompañar.",
+                },
+            },
+            "equipo": "",
+        },
+        "C1 - Sangría clásica": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Vino tinto",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 botella de vino tinto.",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Gaseosa",
+                    "cant_beb_noalc": 1,
+                    "detalle": "1 botella de gaseosa.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Fruta y azúcar",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Frutas picadas + azúcar.",
+                },
+            },
+            "equipo": "",
+        },
+        "D1 - Cerveceo": {
+            "roles": {
+                "A": {
+                    "beb_alc": "Cerveza (six-pack)",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 six-pack de cerveza.",
+                },
+                "B": {
+                    "beb_alc": "Cerveza (six-pack)",
+                    "cant_beb_alc": 1,
+                    "beb_noalc": "",
+                    "cant_beb_noalc": 0,
+                    "detalle": "1 six-pack de cerveza.",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Hielo",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Bolsas de hielo para las cervezas.",
+                },
+            },
+            "equipo": "Se recomienda cooler o balde con hielo.",
+        },
+        "E1 - Refrescos sin alcohol": {
+            "roles": {
+                "A": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Gaseosa",
+                    "cant_beb_noalc": 1,
+                    "detalle": "1 botella grande de gaseosa.",
+                },
+                "B": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Agua",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Agua (botella grande o varios litros).",
+                },
+                "C": {
+                    "beb_alc": "",
+                    "cant_beb_alc": 0,
+                    "beb_noalc": "Jugo y hielo",
+                    "cant_beb_noalc": 1,
+                    "detalle": "Jugo o té frío + 1 bolsa de hielo.",
+                },
+            },
+            "equipo": "",
+        },
+    }
 
+    st.markdown("### 🍹 Bebidas")
+
+    usar_pack = st.radio(
+        "¿Cómo quieres registrar tus bebidas?",
+        ["Ingresar manualmente", "Usar un pack sugerido"],
+        index=0,
+        key="usar_pack",
+    )
+
+    # Inicializamos variables comunes
+    beb_alc_pack = ""
+    cant_beb_alc_pack = 0
+    beb_noalc_pack = ""
+    cant_beb_noalc_pack = 0
+
+    # Variables de la parte manual (les damos valores por defecto)
+    beb_alc_sel = ""
     beb_alc_otro = ""
-    if beb_alc_sel == "Otro (indicar)":
-        beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?", key="beb_alc_otro")
-
-    if beb_alc_sel == "Cerveza":
-        cant_beb_alc = st.number_input(
-            "Cantidad (six-pack de cerveza):",
-            min_value=0,
-            step=1,
-            value=0,
-            key="cant_beb_alc",
-        )
-    elif beb_alc_sel:
-        # Aquí solo botellas, como pediste
-        cant_beb_alc = st.number_input(
-            "Cantidad (botellas):",
-            min_value=0,
-            step=1,
-            value=0,
-            key="cant_beb_alc",
-        )
-    else:
-        cant_beb_alc = 0
-
-    # ---- Bebida no alcohólica / ingredientes ----
-    st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
-    beb_noalc_raw = st.selectbox(
-        "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
-        ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
-        key="beb_noalc_raw",
-    )
-    beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
-
+    cant_beb_alc = 0
+    beb_noalc_sel = ""
     beb_noalc_otro = ""
-    if beb_noalc_sel == "Otro (indicar)":
-        beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?", key="beb_noalc_otro")
+    cant_beb_noalc = 0
 
-    if beb_noalc_sel:
-        if beb_noalc_sel == "Hielo":
-            label_noalc = "Cantidad (bolsas de hielo):"
-        elif beb_noalc_sel == "Gaseosa":
-            label_noalc = "Cantidad (botellas de gaseosa):"
-        elif beb_noalc_sel == "Everest o ginger":
-            label_noalc = "Cantidad (botellas):"
-        elif beb_noalc_sel == "Agua":
-            # Agua: explicitamente litros o botellas
-            label_noalc = "Cantidad de agua (en litros):"
-        elif beb_noalc_sel == "Limón":
-            label_noalc = "Cantidad (kg de limón):"
+    if usar_pack == "Usar un pack sugerido":
+        pack_sel = st.selectbox("Selecciona un pack de bebidas:", list(PACKS.keys()), key="pack_sel")
+        rol_sel = st.radio("Selecciona tu rol en el pack:", ["A", "B", "C"], key="rol_pack")
+
+        info_pack = PACKS.get(pack_sel, {})
+        roles = info_pack.get("roles", {})
+        info_rol = roles.get(rol_sel, None)
+
+        if info_pack.get("equipo"):
+            st.warning(info_pack["equipo"])
+
+        if info_rol is None:
+            st.info("Este rol no tiene aporte definido en este pack.")
         else:
-            label_noalc = "Cantidad:"
+            beb_alc_pack = info_rol["beb_alc"]
+            cant_beb_alc_pack = info_rol["cant_beb_alc"]
+            beb_noalc_pack = info_rol["beb_noalc"]
+            cant_beb_noalc_pack = info_rol["cant_beb_noalc"]
 
-        cant_beb_noalc = st.number_input(
-            label_noalc,
-            min_value=0,
-            step=1,
-            value=0,
-            key="cant_beb_noalc",
-        )
+            detalle = info_rol.get("detalle", "")
+            if detalle:
+                st.markdown(f"**Tu aporte en este pack:** {detalle}")
+
     else:
-        cant_beb_noalc = 0
+        # ---- Bebida alcohólica (modo manual, igual que antes) ----
+        st.markdown("#### 🍷 Bebida alcohólica (opcional)")
+        beb_alc_raw = st.selectbox(
+            "Si llevarás bebida alcohólica, elige una (o deja vacío):",
+            ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
+            key="beb_alc_raw",
+        )
+        beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
+
+        if beb_alc_sel == "Otro (indicar)":
+            beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?", key="beb_alc_otro")
+
+        if beb_alc_sel == "Cerveza":
+            cant_beb_alc = st.number_input(
+                "Cantidad (six-pack de cerveza):",
+                min_value=0,
+                step=1,
+                value=0,
+                key="cant_beb_alc",
+            )
+        elif beb_alc_sel:
+            cant_beb_alc = st.number_input(
+                "Cantidad (botellas):",
+                min_value=0,
+                step=1,
+                value=0,
+                key="cant_beb_alc",
+            )
+        else:
+            cant_beb_alc = 0
+
+        # ---- Bebida no alcohólica / ingredientes (modo manual) ----
+        st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
+        beb_noalc_raw = st.selectbox(
+            "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
+            ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
+            key="beb_noalc_raw",
+        )
+        beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
+
+        if beb_noalc_sel == "Otro (indicar)":
+            beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?", key="beb_noalc_otro")
+
+        if beb_noalc_sel:
+            if beb_noalc_sel == "Hielo":
+                label_noalc = "Cantidad (bolsas de hielo):"
+            elif beb_noalc_sel == "Gaseosa":
+                label_noalc = "Cantidad (botellas de gaseosa):"
+            elif beb_noalc_sel == "Everest o ginger":
+                label_noalc = "Cantidad (botellas):"
+            elif beb_noalc_sel == "Agua":
+                label_noalc = "Cantidad de agua (en litros):"
+            elif beb_noalc_sel == "Limón":
+                label_noalc = "Cantidad (kg de limón):"
+            else:
+                label_noalc = "Cantidad:"
+
+            cant_beb_noalc = st.number_input(
+                label_noalc,
+                min_value=0,
+                step=1,
+                value=0,
+                key="cant_beb_noalc",
+            )
+        else:
+            cant_beb_noalc = 0
 
     enviado = st.button("✅ Registrar aporte", use_container_width=True, key="btn_registrar")
 
@@ -598,46 +827,59 @@ def main():
                 )
                 st.stop()
 
-        # Bebida alcohólica
-        if not beb_alc_sel:
-            beb_alc_final = ""
-            cant_beb_alc_final = 0
-        else:
-            if beb_alc_sel == "Otro (indicar)":
-                if not beb_alc_otro.strip():
-                    st.error("Especifica qué bebida alcohólica llevarás.")
-                    st.stop()
-                beb_alc_final = beb_alc_otro.strip()
-            else:
-                beb_alc_final = beb_alc_sel
+        # ===== BEBIDAS: pack vs manual =====
+        if usar_pack == "Usar un pack sugerido":
+            beb_alc_final = beb_alc_pack
+            cant_beb_alc_final = int(cant_beb_alc_pack)
+            beb_noalc_final = beb_noalc_pack
+            cant_beb_noalc_final = int(cant_beb_noalc_pack)
 
-            if cant_beb_alc <= 0:
-                st.error("Indica una cantidad mayor a 0 para la bebida alcohólica o deja la opción vacía.")
+            if (not beb_alc_final and not beb_noalc_final):
+                st.error("Selecciona un pack y un rol válidos para registrar tu aporte de bebida.")
                 st.stop()
-            cant_beb_alc_final = int(cant_beb_alc)
 
-        # Bebida no alcohólica
-        if not beb_noalc_sel:
-            beb_noalc_final = ""
-            cant_beb_noalc_final = 0
         else:
-            if beb_noalc_sel == "Otro (indicar)":
-                if not beb_noalc_otro.strip():
-                    st.error("Especifica qué bebida no alcohólica / ingrediente llevarás.")
-                    st.stop()
-                beb_noalc_final = beb_noalc_otro.strip()
+            # Bebida alcohólica (manual)
+            if not beb_alc_sel:
+                beb_alc_final = ""
+                cant_beb_alc_final = 0
             else:
-                beb_noalc_final = beb_noalc_sel
+                if beb_alc_sel == "Otro (indicar)":
+                    if not beb_alc_otro.strip():
+                        st.error("Especifica qué bebida alcohólica llevarás.")
+                        st.stop()
+                    beb_alc_final = beb_alc_otro.strip()
+                else:
+                    beb_alc_final = beb_alc_sel
 
-            if cant_beb_noalc <= 0:
-                st.error("Indica una cantidad mayor a 0 para la bebida no alcohólica / ingrediente o deja la opción vacía.")
-                st.stop()
-            cant_beb_noalc_final = int(cant_beb_noalc)
+                if cant_beb_alc <= 0:
+                    st.error("Indica una cantidad mayor a 0 para la bebida alcohólica o deja la opción vacía.")
+                    st.stop()
+                cant_beb_alc_final = int(cant_beb_alc)
 
+            # Bebida no alcohólica (manual)
+            if not beb_noalc_sel:
+                beb_noalc_final = ""
+                cant_beb_noalc_final = 0
+            else:
+                if beb_noalc_sel == "Otro (indicar)":
+                    if not beb_noalc_otro.strip():
+                        st.error("Especifica qué bebida no alcohólica / ingrediente llevarás.")
+                        st.stop()
+                    beb_noalc_final = beb_noalc_otro.strip()
+                else:
+                    beb_noalc_final = beb_noalc_sel
+
+                if cant_beb_noalc <= 0:
+                    st.error("Indica una cantidad mayor a 0 para la bebida no alcohólica / ingrediente o deja la opción vacía.")
+                    st.stop()
+                cant_beb_noalc_final = int(cant_beb_noalc)
+
+        # Validación común: al menos una bebida
         if (not beb_alc_final or cant_beb_alc_final <= 0) and (
             not beb_noalc_final or cant_beb_noalc_final <= 0
         ):
-            st.error("Debes registrar al menos una bebida (alcohólica o no alcohólica).")
+            st.error("Debes registrar al menos una bebida (alcohólica o no alcohólica / ingrediente).")
             st.stop()
 
         nuevo = {
@@ -654,14 +896,14 @@ def main():
         df_aportes = pd.concat([df_aportes, pd.DataFrame([nuevo])], ignore_index=True)
         guardar_aportes(df_aportes)
 
-        msg = f"¡Listo, {nombre}! Llevarás **{int(cant_piqueo)}** de **{piqueo_final}**"
+        msg = f"¡Listo, {nombre}! Llevarás *{int(cant_piqueo)}* de *{piqueo_final}*"
         if beb_alc_final:
-            if normalizar(beb_alc_final) == "cerveza":
-                msg += f", **{cant_beb_alc_final}** six-pack de **{beb_alc_final}**"
+            if normalizar(beb_alc_final) == "cerveza" or "cerveza" in normalizar(beb_alc_final):
+                msg += f", *{cant_beb_alc_final}* six-pack de *{beb_alc_final}*"
             else:
-                msg += f", **{cant_beb_alc_final}** botellas de **{beb_alc_final}**"
+                msg += f", *{cant_beb_alc_final}* de *{beb_alc_final}*"
         if beb_noalc_final:
-            msg += f", y **{cant_beb_noalc_final}** de **{beb_noalc_final}**"
+            msg += f", y *{cant_beb_noalc_final}* de *{beb_noalc_final}*"
 
         st.success(msg + " 🎉")
         st.rerun()
@@ -758,13 +1000,13 @@ def main():
             base_token = normalizar(base)
             if base_token not in tokens:
                 continue
-            st.markdown(f"**Con {base.lower()} se puede preparar:**")
+            st.markdown(f"*Con {base.lower()} se puede preparar:*")
             for nombre_trago, reqs in recetas.items():
                 faltan = [r for r in reqs if r not in tokens]
                 if not faltan:
                     st.markdown(f"- ✅ {nombre_trago}")
                 else:
-                    st.markdown(f"- ℹ️ {nombre_trago}: faltarían **{', '.join(faltan)}**")
+                    st.markdown(f"- ℹ️ {nombre_trago}: faltarían *{', '.join(faltan)}*")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
