@@ -162,7 +162,7 @@ PIQUEO_CONFIG = {
 BAG_PIQUEOS = ["Cheetos y chizitos", "Papás, chifles, camotes y chifles"]
 MAX_BOLSAS_GRUPO = 6  # bolsas grandes totales de snacks
 
-# -------- Recetas de tragos --------
+# -------- Recetas de tragos (para sugerencias) --------
 RECIPES = {
     "Pisco": {
         "Chilcano clásico": ["pisco", "ginger ale", "limón", "hielo"],
@@ -191,22 +191,6 @@ RECIPES = {
     },
 }
 
-BEBIDA_ALC_TOKENS = {
-    "pisco": "pisco",
-    "cerveza": "cerveza",
-    "vino tinto": "vino tinto",
-    "vino": "vino tinto",
-    "ron": "ron",
-}
-
-BEBIDA_NOALC_TOKENS = {
-    "gaseosa": "gaseosa",
-    "everest": "ginger ale",
-    "agua": "agua",
-    "hielo": "hielo",
-    "limón": "limón",
-}
-
 # ---------- UTILIDADES ----------
 
 def normalizar(s: str) -> str:
@@ -233,6 +217,8 @@ def cargar_aportes():
         "cant_bebida_alcoholica",
         "bebida_no_alcoholica",
         "cant_bebida_no_alcoholica",
+        "pack_codigo",
+        "pack_rol",
     ]
     if ARCHIVO_APORTES.exists():
         df = pd.read_csv(ARCHIVO_APORTES, dtype=str)
@@ -264,7 +250,7 @@ def contar_bolsas(df_aportes: pd.DataFrame):
     return int(df_tmp.loc[mask, "cant_piqueo"].sum())
 
 def obtener_cantidad_piqueo(piqueo_sel: str):
-    """Devuelve cantidad y etiqueta para el campo, según el tipo."""
+    """Devuelve cantidad para el piqueo según el tipo."""
     if not piqueo_sel:
         return 0, ""
 
@@ -325,18 +311,17 @@ def ingredientes_disponibles(df_aportes: pd.DataFrame):
     for _, row in df_aportes.iterrows():
         beb_alc = normalizar(row.get("bebida_alcoholica", ""))
         cant_alc = safe_int(row.get("cant_bebida_alcoholica", 0))
-        if beb_alc and cant_alc > 0 and beb_alc in BEBIDA_ALC_TOKENS:
-            tokens.add(BEBIDA_ALC_TOKENS[beb_alc])
+        if beb_alc and cant_alc > 0:
+            tokens.add(beb_alc)
 
         beb_noalc = normalizar(row.get("bebida_no_alcoholica", ""))
         cant_noalc = safe_int(row.get("cant_bebida_no_alcoholica", 0))
-        if beb_noalc and cant_noalc > 0 and beb_noalc in BEBIDA_NOALC_TOKENS:
-            tokens.add(BEBIDA_NOALC_TOKENS[beb_noalc])
+        if beb_noalc and cant_noalc > 0:
+            tokens.add(beb_noalc)
 
     return tokens
 
 def resumen_bebidas(df_aportes: pd.DataFrame):
-    """Totales simples de bebidas (lo declarado por las personas)."""
     if df_aportes.empty:
         return 0, 0
     df_tmp = df_aportes.copy()
@@ -346,12 +331,40 @@ def resumen_bebidas(df_aportes: pd.DataFrame):
     total_noalc = int(df_tmp["cant_bebida_no_alcoholica"].sum())
     return total_alc, total_noalc
 
-def estado_rango(total, minimo, maximo):
-    if total < minimo:
-        return f"Por debajo del mínimo ⚠️"
-    if total > maximo:
-        return f"Por encima del máximo ⚠️"
-    return "Dentro del rango ✅"
+def resumen_packs(df_aportes: pd.DataFrame):
+    """Resumen por pack: personas, vacantes, etc."""
+    if df_aportes.empty:
+        return pd.DataFrame(), 0, False
+
+    df = df_aportes.copy()
+    df["pack_codigo"] = df["pack_codigo"].astype(str).str.strip()
+    df = df[df["pack_codigo"] != ""]
+    if df.empty:
+        return pd.DataFrame(), 0, False
+
+    resumen = []
+    for pack, sub in df.groupby("pack_codigo"):
+        personas = sub["nombre"].nunique()
+        vacantes = max(0, 3 - personas)
+        estado = "Completo ✅" if personas == 3 else f"En formación (faltan {vacantes})"
+        resumen.append(
+            {
+                "Pack": pack,
+                "Personas en el pack": personas,
+                "Vacantes (de 3)": vacantes,
+                "Estado": estado,
+            }
+        )
+
+    df_res = pd.DataFrame(resumen).sort_values("Pack")
+    num_packs = df_res.shape[0]
+    packs_lista = df_res["Pack"].tolist()
+
+    hay_cerveza_y_sangria = any("Cerveza" in p for p in packs_lista) and any(
+        "Sangría" in p or "Sangria" in p for p in packs_lista
+    )
+    return df_res, num_packs, hay_cerveza_y_sangria
+
 
 # ---------- APP STREAMLIT ----------
 
@@ -417,8 +430,9 @@ def main():
         st.image(IMAGEN_PORTADA, use_column_width=True)
 
     st.markdown('<div class="titulo-principal">🎄 Aportes Posada Territorial 2025</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitulo">Registra tu piqueo y bebida de forma ordenada ✨</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitulo">Registra tu piqueo y tu pack de bebidas ✨</div>', unsafe_allow_html=True)
 
+    # ---- TARJETA DE EXPLICACIÓN GENERAL ----
     st.markdown(
         """
         <div style="
@@ -430,12 +444,32 @@ def main():
             color:#5a3c2c;
             margin-top:10px;
             text-align:justify;">
-            ⚠️ <strong>Sugerencia general:</strong><br>
-            Somos <strong>18 personas</strong>. Para que todos puedan probar de todo sin que sobre demasiado,
-            la idea es que los piqueos vengan en <strong>presentaciones grandes o para compartir</strong>
-            (bolsas familiares, fracciones de ciento, bandejas), y que en total no superemos, por ejemplo,
-            <strong>6 bolsas grandes de snacks</strong> y una cantidad razonable de dulces y preparados.
-        </div>
+            ⚠️ <strong>¿Cómo nos organizamos?</strong><br>
+            
+            Somos <strong>18 personas</strong>.
+
+<ul> <li><strong>Piqueos:</strong> 
+Se lleva en <strong>presentación grande</strong> 
+(bandejas, fracciones de ciento o bolsas grandes). 
+Hay cupos para cada tipo de piqueo y, en total, 
+trataremos de no pasar de <strong>6 bolsas grandes</strong> de snacks.</li> 
+<li><strong>Bebidas:</strong> Funcionan por <strong>packs</strong>. 
+Cada pack se comparte entre <strong>3 personas</strong> (roles A, B y C). 
+<br>Ejemplo: una persona lleva el pisco, otra el ginger ale y otra el limón + hielo. 
+</li> <li>Si varias personas eligen el <strong>mismo pack</strong>, 
+forman un mini-equipo y deben <strong>coordinar entre ellas</strong> para dividir gastos 
+y asegurarse de completar todo (botellas, mezclas, hielo, etc.).</li>
+ <li>No necesitamos demasiados packs distintos. <br>Si 
+ los packs son sencillos, bastan <strong>3 packs</strong>
+ diferentes para cubrir a los 18. <br>Si agregamos también
+ un pack de <strong>Cerveza</strong> y uno de <strong>Sangría</strong>, 
+ como máximo tendríamos <strong>4 packs</strong> en total.</li> <li>Las 
+ cervezas se pueden enfriar en la <strong>refri del local</strong>.</li> </ul> </div>
+            
+         
+            
+            
+           
         """,
         unsafe_allow_html=True,
     )
@@ -480,7 +514,7 @@ def main():
     else:
         cant_piqueo = 0
 
-    # ---------- PACKS DE BEBIDAS ----------
+    # ---------- PACKS DE BEBIDAS (SIN MODO MANUAL) ----------
     PACKS = {
         "A1 - Chilcano clásico": {
             "roles": {
@@ -612,7 +646,7 @@ def main():
             },
             "equipo": "",
         },
-        "D1 - Cerveceo": {
+        "D1 - Pack cerveza": {
             "roles": {
                 "A": {
                     "beb_alc": "Cerveza (six-pack)",
@@ -626,7 +660,7 @@ def main():
                     "cant_beb_alc": 1,
                     "beb_noalc": "",
                     "cant_beb_noalc": 0,
-                    "detalle": "1 six-pack de cerveza.",
+                    "detalle": "1 six-pack de cerveza adicional.",
                 },
                 "C": {
                     "beb_alc": "",
@@ -636,7 +670,7 @@ def main():
                     "detalle": "Bolsas de hielo para las cervezas.",
                 },
             },
-            "equipo": "Se recomienda cooler o balde con hielo.",
+            "equipo": "Las cervezas se pueden enfriar en la refri del local.",
         },
         "E1 - Refrescos sin alcohol": {
             "roles": {
@@ -666,119 +700,65 @@ def main():
         },
     }
 
-    st.markdown("### 🍹 Bebidas")
+    st.markdown("### 🍹 Packs de bebidas")
 
-    usar_pack = st.radio(
-        "¿Cómo quieres registrar tus bebidas?",
-        ["Ingresar manualmente", "Usar un pack sugerido"],
-        index=0,
-        key="usar_pack",
+    pack_opciones = ["(Elige un pack)"] + list(PACKS.keys())
+    pack_sel = st.selectbox(
+        "Elige un pack de bebidas (cada pack es para 3 personas: roles A, B y C):",
+        pack_opciones,
+        key="pack_sel",
     )
 
-    # Inicializamos variables comunes
-    beb_alc_pack = ""
-    cant_beb_alc_pack = 0
-    beb_noalc_pack = ""
-    cant_beb_noalc_pack = 0
+    beb_alc_final = ""
+    cant_beb_alc_final = 0
+    beb_noalc_final = ""
+    cant_beb_noalc_final = 0
+    pack_codigo = ""
+    pack_rol = ""
+    rol_sel = None
 
-    # Variables de la parte manual (les damos valores por defecto)
-    beb_alc_sel = ""
-    beb_alc_otro = ""
-    cant_beb_alc = 0
-    beb_noalc_sel = ""
-    beb_noalc_otro = ""
-    cant_beb_noalc = 0
+    if pack_sel and pack_sel != "(Elige un pack)":
+        pack_codigo = pack_sel
+        info_pack = PACKS[pack_sel]
 
-    if usar_pack == "Usar un pack sugerido":
-        pack_sel = st.selectbox("Selecciona un pack de bebidas:", list(PACKS.keys()), key="pack_sel")
-        rol_sel = st.radio("Selecciona tu rol en el pack:", ["A", "B", "C"], key="rol_pack")
+        # Cuántas personas ya están en este pack
+        personas_actuales = 0
+        if not df_aportes.empty:
+            personas_actuales = df_aportes.loc[
+                df_aportes["pack_codigo"] == pack_sel, "nombre"
+            ].nunique()
+        vacantes_actuales = max(0, 3 - personas_actuales)
 
-        info_pack = PACKS.get(pack_sel, {})
-        roles = info_pack.get("roles", {})
-        info_rol = roles.get(rol_sel, None)
-
-        if info_pack.get("equipo"):
-            st.warning(info_pack["equipo"])
-
-        if info_rol is None:
-            st.info("Este rol no tiene aporte definido en este pack.")
-        else:
-            beb_alc_pack = info_rol["beb_alc"]
-            cant_beb_alc_pack = info_rol["cant_beb_alc"]
-            beb_noalc_pack = info_rol["beb_noalc"]
-            cant_beb_noalc_pack = info_rol["cant_beb_noalc"]
-
-            detalle = info_rol.get("detalle", "")
-            if detalle:
-                st.markdown(f"**Tu aporte en este pack:** {detalle}")
-
-    else:
-        # ---- Bebida alcohólica (modo manual, igual que antes) ----
-        st.markdown("#### 🍷 Bebida alcohólica (opcional)")
-        beb_alc_raw = st.selectbox(
-            "Si llevarás bebida alcohólica, elige una (o deja vacío):",
-            ["(Sin bebida alcohólica)"] + LISTA_BEBIDAS_ALC,
-            key="beb_alc_raw",
+        st.markdown(
+            f"Actualmente este pack tiene <strong>{personas_actuales}</strong> persona(s) registrada(s). "
+            f"El pack es para <strong>3 personas</strong>, así que hay espacio para "
+            f"<strong>{vacantes_actuales}</strong> más (contándote a ti).",
+            unsafe_allow_html=True,
         )
-        beb_alc_sel = "" if beb_alc_raw == "(Sin bebida alcohólica)" else beb_alc_raw
 
-        if beb_alc_sel == "Otro (indicar)":
-            beb_alc_otro = st.text_input("¿Cuál bebida alcohólica?", key="beb_alc_otro")
-
-        if beb_alc_sel == "Cerveza":
-            cant_beb_alc = st.number_input(
-                "Cantidad (six-pack de cerveza):",
-                min_value=0,
-                step=1,
-                value=0,
-                key="cant_beb_alc",
-            )
-        elif beb_alc_sel:
-            cant_beb_alc = st.number_input(
-                "Cantidad (botellas):",
-                min_value=0,
-                step=1,
-                value=0,
-                key="cant_beb_alc",
-            )
+        if personas_actuales >= 3:
+            st.error("Este pack ya está completo, elige otro pack.")
         else:
-            cant_beb_alc = 0
-
-        # ---- Bebida no alcohólica / ingredientes (modo manual) ----
-        st.markdown("#### 🥤 Bebida no alcohólica / ingredientes")
-        beb_noalc_raw = st.selectbox(
-            "Si llevarás bebida no alcohólica o ingredientes, elige una (o deja vacío):",
-            ["(Sin bebida no alcohólica / ingrediente)"] + LISTA_BEBIDAS_NO_ALC,
-            key="beb_noalc_raw",
-        )
-        beb_noalc_sel = "" if beb_noalc_raw == "(Sin bebida no alcohólica / ingrediente)" else beb_noalc_raw
-
-        if beb_noalc_sel == "Otro (indicar)":
-            beb_noalc_otro = st.text_input("¿Cuál bebida / ingrediente?", key="beb_noalc_otro")
-
-        if beb_noalc_sel:
-            if beb_noalc_sel == "Hielo":
-                label_noalc = "Cantidad (bolsas de hielo):"
-            elif beb_noalc_sel == "Gaseosa":
-                label_noalc = "Cantidad (botellas de gaseosa):"
-            elif beb_noalc_sel == "Everest o ginger":
-                label_noalc = "Cantidad (botellas):"
-            elif beb_noalc_sel == "Agua":
-                label_noalc = "Cantidad de agua (en litros):"
-            elif beb_noalc_sel == "Limón":
-                label_noalc = "Cantidad (kg de limón):"
-            else:
-                label_noalc = "Cantidad:"
-
-            cant_beb_noalc = st.number_input(
-                label_noalc,
-                min_value=0,
-                step=1,
-                value=0,
-                key="cant_beb_noalc",
+            rol_sel = st.radio(
+                "¿Qué parte del pack vas a llevar?",
+                ["A", "B", "C"],
+                key="rol_pack",
             )
-        else:
-            cant_beb_noalc = 0
+            pack_rol = rol_sel
+
+            if info_pack.get("equipo"):
+                st.warning(info_pack["equipo"])
+
+            info_rol = info_pack["roles"].get(rol_sel)
+            if info_rol:
+                beb_alc_final = info_rol["beb_alc"]
+                cant_beb_alc_final = info_rol["cant_beb_alc"]
+                beb_noalc_final = info_rol["beb_noalc"]
+                cant_beb_noalc_final = info_rol["cant_beb_noalc"]
+
+                detalle = info_rol.get("detalle", "")
+                if detalle:
+                    st.markdown(f"**Tu aporte en este pack:** {detalle}")
 
     enviado = st.button("✅ Registrar aporte", use_container_width=True, key="btn_registrar")
 
@@ -827,59 +807,25 @@ def main():
                 )
                 st.stop()
 
-        # ===== BEBIDAS: pack vs manual =====
-        if usar_pack == "Usar un pack sugerido":
-            beb_alc_final = beb_alc_pack
-            cant_beb_alc_final = int(cant_beb_alc_pack)
-            beb_noalc_final = beb_noalc_pack
-            cant_beb_noalc_final = int(cant_beb_noalc_pack)
+        # Validación de pack
+        if not pack_codigo or not pack_rol:
+            st.error("Elige un pack de bebidas y tu rol dentro del pack.")
+            st.stop()
 
-            if (not beb_alc_final and not beb_noalc_final):
-                st.error("Selecciona un pack y un rol válidos para registrar tu aporte de bebida.")
-                st.stop()
+        # Recalcular personas en ese pack para no pasarnos de 3
+        personas_actuales = 0
+        if not df_aportes.empty:
+            personas_actuales = df_aportes.loc[
+                df_aportes["pack_codigo"] == pack_codigo, "nombre"
+            ].nunique()
+        if personas_actuales >= 3:
+            st.error("Este pack ya llegó a 3 personas. Elige otro pack.")
+            st.stop()
 
-        else:
-            # Bebida alcohólica (manual)
-            if not beb_alc_sel:
-                beb_alc_final = ""
-                cant_beb_alc_final = 0
-            else:
-                if beb_alc_sel == "Otro (indicar)":
-                    if not beb_alc_otro.strip():
-                        st.error("Especifica qué bebida alcohólica llevarás.")
-                        st.stop()
-                    beb_alc_final = beb_alc_otro.strip()
-                else:
-                    beb_alc_final = beb_alc_sel
-
-                if cant_beb_alc <= 0:
-                    st.error("Indica una cantidad mayor a 0 para la bebida alcohólica o deja la opción vacía.")
-                    st.stop()
-                cant_beb_alc_final = int(cant_beb_alc)
-
-            # Bebida no alcohólica (manual)
-            if not beb_noalc_sel:
-                beb_noalc_final = ""
-                cant_beb_noalc_final = 0
-            else:
-                if beb_noalc_sel == "Otro (indicar)":
-                    if not beb_noalc_otro.strip():
-                        st.error("Especifica qué bebida no alcohólica / ingrediente llevarás.")
-                        st.stop()
-                    beb_noalc_final = beb_noalc_otro.strip()
-                else:
-                    beb_noalc_final = beb_noalc_sel
-
-                if cant_beb_noalc <= 0:
-                    st.error("Indica una cantidad mayor a 0 para la bebida no alcohólica / ingrediente o deja la opción vacía.")
-                    st.stop()
-                cant_beb_noalc_final = int(cant_beb_noalc)
-
-        # Validación común: al menos una bebida
         if (not beb_alc_final or cant_beb_alc_final <= 0) and (
             not beb_noalc_final or cant_beb_noalc_final <= 0
         ):
-            st.error("Debes registrar al menos una bebida (alcohólica o no alcohólica / ingrediente).")
+            st.error("Hubo un problema al leer tu pack. Vuelve a seleccionarlo.")
             st.stop()
 
         nuevo = {
@@ -888,9 +834,11 @@ def main():
             "tipo_piqueo": tipo_piqueo_final,
             "cant_piqueo": int(cant_piqueo),
             "bebida_alcoholica": beb_alc_final,
-            "cant_bebida_alcoholica": cant_beb_alc_final,
+            "cant_bebida_alcoholica": int(cant_beb_alc_final),
             "bebida_no_alcoholica": beb_noalc_final,
-            "cant_bebida_no_alcoholica": cant_beb_noalc_final,
+            "cant_bebida_no_alcoholica": int(cant_beb_noalc_final),
+            "pack_codigo": pack_codigo,
+            "pack_rol": pack_rol,
         }
 
         df_aportes = pd.concat([df_aportes, pd.DataFrame([nuevo])], ignore_index=True)
@@ -898,13 +846,14 @@ def main():
 
         msg = f"¡Listo, {nombre}! Llevarás *{int(cant_piqueo)}* de *{piqueo_final}*"
         if beb_alc_final:
-            if normalizar(beb_alc_final) == "cerveza" or "cerveza" in normalizar(beb_alc_final):
+            if "cerveza" in normalizar(beb_alc_final):
                 msg += f", *{cant_beb_alc_final}* six-pack de *{beb_alc_final}*"
             else:
                 msg += f", *{cant_beb_alc_final}* de *{beb_alc_final}*"
         if beb_noalc_final:
             msg += f", y *{cant_beb_noalc_final}* de *{beb_noalc_final}*"
 
+        msg += f" (Pack: {pack_codigo}, rol {pack_rol})."
         st.success(msg + " 🎉")
         st.rerun()
 
@@ -947,52 +896,50 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---------- RESUMEN DE BEBIDAS ----------
+    # ---------- RESUMEN DE PACKS DE BEBIDAS ----------
     st.markdown("---")
-    st.subheader("🥤 Resumen de bebidas (cupos sugeridos)")
+    st.subheader("🍹 Resumen de packs de bebidas")
 
-    total_alc, total_noalc = resumen_bebidas(df_aportes)
+    df_packs, num_packs, hay_cerveza_y_sangria = resumen_packs(df_aportes)
 
-    # Rango sugerido para 18 personas (simple y equilibrado)
-    RANGO_ALC = (6, 15)      # botellas / six-pack declarados
-    RANGO_NOALC = (10, 22)   # botellas / litros / unidades
+    if df_packs.empty:
+        st.markdown(
+            "<p style='color:#777;'>Todavía nadie ha registrado packs de bebidas.</p>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.dataframe(df_packs, use_container_width=True, hide_index=True)
 
-    filas_beb = [
-        {
-            "Tipo": "Bebidas alcohólicas",
-            "Cantidad registrada": total_alc,
-            "Rango sugerido": f"{RANGO_ALC[0]} – {RANGO_ALC[1]}",
-            "Estado": estado_rango(total_alc, *RANGO_ALC),
-        },
-        {
-            "Tipo": "Bebidas no alcohólicas / ingredientes",
-            "Cantidad registrada": total_noalc,
-            "Rango sugerido": f"{RANGO_NOALC[0]} – {RANGO_NOALC[1]}",
-            "Estado": estado_rango(total_noalc, *RANGO_NOALC),
-        },
-    ]
+        texto_extra = (
+            f"<br>Actualmente hay <strong>{num_packs}</strong> pack(s) de bebidas distintos registrados."
+        )
+        if num_packs > 4:
+            texto_extra += " Es bastante variedad, revisen si realmente necesitan tantos packs diferentes. 😉"
+        elif num_packs > 3 and not hay_cerveza_y_sangria:
+            texto_extra += " Recuerden que la idea general es no pasar de 3 packs si son sencillos."
+        elif num_packs == 4 and hay_cerveza_y_sangria:
+            texto_extra += " Con cerveza y sangría se acepta hasta 4 packs, pero ya es tope."
 
-    df_beb = pd.DataFrame(filas_beb)
-    st.dataframe(df_beb, use_container_width=True, hide_index=True)
-
-    st.markdown(
-        """
-        <div style="margin-top:6px;font-size:0.9rem;color:#555;">
-        💡 La idea es que haya <strong>suficiente bebida sin alcohol</strong> para preparar jugos, chilcanos,
-        sangrías, etc., y que la cantidad de alcohol sea razonable para 18 personas.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        st.markdown(
+            f"""
+            <div style="margin-top:6px;font-size:0.9rem;color:#555;text-align:justify;">
+            💡 Cada pack está pensado para 3 personas (A, B y C).<br>
+            Si ves que tu pack está en <strong>“En formación”</strong>, 
+            coordina con tus compas para que se sumen dos personas más y el pack quede completo.
+            {texto_extra}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     # ---------- TRAGOS POSIBLES ----------
     st.markdown("---")
-    st.subheader("🍹 Tragos posibles con lo que ya hay")
+    st.subheader("🍸 Tragos posibles con lo que ya hay")
 
     tokens = ingredientes_disponibles(df_aportes)
     if not tokens:
         st.markdown(
-            "<p style='color:#777;'>Aún no hay bebidas suficientes para sugerir tragos.</p>",
+            "<p style='color:#777;'>Aún no hay suficientes bebidas/ingredientes registrados para sugerir tragos.</p>",
             unsafe_allow_html=True,
         )
     else:
@@ -1002,13 +949,11 @@ def main():
                 continue
             st.markdown(f"*Con {base.lower()} se puede preparar:*")
             for nombre_trago, reqs in recetas.items():
-                faltan = [r for r in reqs if r not in tokens]
+                faltan = [r for r in reqs if normalizar(r) not in tokens]
                 if not faltan:
                     st.markdown(f"- ✅ {nombre_trago}")
                 else:
                     st.markdown(f"- ℹ️ {nombre_trago}: faltarían *{', '.join(faltan)}*")
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------- REGISTROS, FALTAN Y DESCARGA ----------
     if not df_aportes.empty:
@@ -1033,6 +978,8 @@ def main():
                 "cant_bebida_alcoholica": "Cant. beb. alcohólica",
                 "bebida_no_alcoholica": "Bebida no alcohólica / ingrediente",
                 "cant_bebida_no_alcoholica": "Cant. beb. no alcohólica / ingr.",
+                "pack_codigo": "Pack elegido",
+                "pack_rol": "Rol en el pack",
             },
             inplace=True,
         )
@@ -1072,4 +1019,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
